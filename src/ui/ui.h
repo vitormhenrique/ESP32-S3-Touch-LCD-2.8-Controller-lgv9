@@ -13,7 +13,11 @@ extern "C" {
     #include "lvgl.h"
 
 #include "ui_helpers.h"
+#include "ui_comp.h"
+#include "ui_comp_hook.h"
 #include "ui_events.h"
+#include "ui_theme_manager.h"
+#include "ui_themes.h"
 
 ///////////////////// SCREENS ////////////////////
 #include "ui_Screen1.h"
@@ -23,6 +27,9 @@ extern "C" {
 
 // EVENTS
 extern lv_obj_t *ui____initial_actions0;
+
+// IMAGES AND IMAGE SETS
+LV_IMG_DECLARE( ui_img_battery_full_24dp_e3e3e3_fill0_wght400_grad0_opsz24_png);   // assets/battery_full_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.png
 
 // UI INIT
 void ui_init(void);

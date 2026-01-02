@@ -1,7 +1,68 @@
 {
   "deftheme": {
     "name": "Default",
-    "properties": []
+    "properties": [
+      {
+        "nid": 1000234,
+        "strtype": "THEME_COLOR",
+        "strval": "Background",
+        "intarray": [
+          40,
+          42,
+          54,
+          255
+        ],
+        "InheritedType": 0
+      },
+      {
+        "nid": 1000237,
+        "strtype": "THEME_COLOR",
+        "strval": "Foreground",
+        "intarray": [
+          248,
+          248,
+          242,
+          255
+        ],
+        "InheritedType": 0
+      },
+      {
+        "nid": 1000238,
+        "strtype": "THEME_COLOR",
+        "strval": "Comment",
+        "intarray": [
+          98,
+          114,
+          164,
+          255
+        ],
+        "InheritedType": 0
+      },
+      {
+        "nid": 1000239,
+        "strtype": "THEME_COLOR",
+        "strval": "Cyan",
+        "intarray": [
+          139,
+          233,
+          253,
+          255
+        ],
+        "InheritedType": 0
+      },
+      {
+        "nid": 1000240,
+        "strtype": "THEME_COLOR",
+        "strval": "Green",
+        "intarray": [
+          80,
+          250,
+          123,
+          255
+        ],
+        "InheritedType": 0
+      }
+    ]
   },
   "themes": [],
   "selected_theme": "Default"

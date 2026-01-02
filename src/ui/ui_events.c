@@ -5,6 +5,7 @@
 
 #include "ui.h"
 
-void ui_comp_BtnTest_create_hook( lv_obj_t * comp)
+void printStuff(lv_event_t * e)
 {
+	// Your code here
 }

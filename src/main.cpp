@@ -9,11 +9,21 @@
 #include "LVGL_Example.h"
 #include "BAT_Driver.h"
 #include "Wireless.h"
+#include "InputManager.h"
 #include "ui/ui.h"
+
+// Click event callback for BtnTest1 - prints input manager state
+static void BtnTest1_click_cb(lv_event_t *e) {
+  printf("\r\n=== BtnTest1 Clicked - Input State ===\r\n");
+  RCInput.printDebug();
+}
 
 void DriverTask(void *parameter) {
   Wireless_Test2();
+  Input_Init();  // Initialize InputManager
+  
   while(1){
+    Input_Update();  // Update all inputs
     PWR_Loop();
     BAT_Get_Volts();
     PCF85063_Loop();
@@ -48,14 +58,10 @@ void setup()
   Lvgl_Init();
 
   ui_init();  
+  
+  // Register click event for BtnTest1
+  lv_obj_add_event_cb(uic_BtnTest1, BtnTest1_click_cb, LV_EVENT_CLICKED, NULL);
 
-  // Lvgl_Example1();
-  // lv_demo_widgets();               
-  // lv_demo_benchmark();          
-  // lv_demo_keypad_encoder();     
-  // lv_demo_music();              
-  // lv_demo_printer();
-  // lv_demo_stress();   
   Driver_Loop();
 }
 
