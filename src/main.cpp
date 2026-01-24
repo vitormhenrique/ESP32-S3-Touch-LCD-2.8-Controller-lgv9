@@ -10,13 +10,8 @@
 #include "BAT_Driver.h"
 #include "Wireless.h"
 #include "InputManager.h"
-#include "ui/ui.h"
-
-// Click event callback for BtnTest1 - prints input manager state
-static void BtnTest1_click_cb(lv_event_t *e) {
-  printf("\r\n=== BtnTest1 Clicked - Input State ===\r\n");
-  RCInput.printDebug();
-}
+#include "ui_custom.h"
+#include "ui_custom_integration.h"
 
 void DriverTask(void *parameter) {
   Wireless_Test2();
@@ -57,10 +52,7 @@ void setup()
   LCD_Init();
   Lvgl_Init();
 
-  ui_init();  
-  
-  // Register click event for BtnTest1
-  lv_obj_add_event_cb(uic_BtnTest1, BtnTest1_click_cb, LV_EVENT_CLICKED, NULL);
+  ui_custom_init();  // Use custom UI
 
   Driver_Loop();
 }
@@ -68,5 +60,6 @@ void setup()
 void loop()
 {
   Lvgl_Loop();
+  ui_update_from_inputs();  // Update UI with input states
   vTaskDelay(pdMS_TO_TICKS(5));
 }
