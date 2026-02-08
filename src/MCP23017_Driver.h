@@ -6,8 +6,10 @@
 /******************************************************************************
  * MCP23017 GPIO Expander Driver
  * 
- * Handles two MCP23017 expanders for reading switch inputs including
- * standard 2-position switches, momentary buttons, and 3-position toggles.
+ * Handles two MCP23017 expanders for reading digital inputs including:
+ * - Standard 2-position switches and momentary buttons
+ * - Navigation switches (5-way: up, down, left, right, center)
+ * - Rotary encoders
  ******************************************************************************/
 
 class MCP23017_Driver {
@@ -25,6 +27,10 @@ public:
      * Call this periodically (e.g., every 10-20ms)
      */
     void update();
+    
+    //=========================================================================
+    // Standard Switch Access
+    //=========================================================================
     
     /**
      * Get current state of a standard switch
@@ -48,6 +54,97 @@ public:
     bool switchReleased(uint8_t index);
     
     /**
+     * Get switch name by index
+     * @param index Switch index
+     * @return Switch name string
+     */
+    const char* getSwitchName(uint8_t index);
+    
+    //=========================================================================
+    // Navigation Switch Access
+    //=========================================================================
+    
+    /**
+     * Check if a navigation switch direction is active
+     * @param navIndex Navigation switch index (0 or 1)
+     * @param direction Direction to check (NAV_UP, NAV_DOWN, etc.)
+     * @return true if direction is active
+     */
+    bool getNavDirection(uint8_t navIndex, NavDirection_t direction);
+    
+    /**
+     * Check if a navigation switch direction was just pressed
+     * @param navIndex Navigation switch index
+     * @param direction Direction to check
+     * @return true if direction was just activated
+     */
+    bool navPressed(uint8_t navIndex, NavDirection_t direction);
+    
+    /**
+     * Check if a navigation switch direction was just released
+     * @param navIndex Navigation switch index
+     * @param direction Direction to check
+     * @return true if direction was just deactivated
+     */
+    bool navReleased(uint8_t navIndex, NavDirection_t direction);
+    
+    /**
+     * Get navigation switch name by index
+     * @param navIndex Navigation switch index
+     * @return Navigation switch name string
+     */
+    const char* getNavSwitchName(uint8_t navIndex);
+    
+    //=========================================================================
+    // Encoder Access
+    //=========================================================================
+    
+    /**
+     * Get encoder position
+     * @param encIndex Encoder index (0 or 1)
+     * @return Current encoder position (signed)
+     */
+    int32_t getEncoderPosition(uint8_t encIndex);
+    
+    /**
+     * Reset encoder position to zero
+     * @param encIndex Encoder index
+     */
+    void resetEncoder(uint8_t encIndex);
+    
+    /**
+     * Set encoder position
+     * @param encIndex Encoder index
+     * @param position New position value
+     */
+    void setEncoderPosition(uint8_t encIndex, int32_t position);
+    
+    /**
+     * Check if encoder changed since last update
+     * @param encIndex Encoder index
+     * @return true if position changed
+     */
+    bool encoderChanged(uint8_t encIndex);
+    
+    /**
+     * Get encoder delta since last check
+     * @param encIndex Encoder index
+     * @return Change in position since last call
+     */
+    int32_t getEncoderDelta(uint8_t encIndex);
+    
+    /**
+     * Get encoder name by index
+     * @param encIndex Encoder index
+     * @return Encoder name string
+     */
+    const char* getEncoderName(uint8_t encIndex);
+    
+    //=========================================================================
+    // 3-Position Toggle Access (legacy, for compatibility)
+    //=========================================================================
+    
+    /**
      * Get current state of a 3-position toggle
      * @param index Toggle index (0 to NUM_3POS_TOGGLES-1)
      * @return Current toggle position
@@ -62,18 +159,15 @@ public:
     bool toggle3PosChanged(uint8_t index);
     
     /**
-     * Get switch name by index
-     * @param index Switch index
-     * @return Switch name string
-     */
-    const char* getSwitchName(uint8_t index);
-    
-    /**
      * Get 3-position toggle name by index
      * @param index Toggle index
      * @return Toggle name string
      */
     const char* getToggle3PosName(uint8_t index);
+    
+    //=========================================================================
+    // Utility
+    //=========================================================================
     
     /**
      * Read raw pin state from expander (for debugging)
@@ -94,17 +188,21 @@ private:
     bool _initialized[2];                // Initialization status
     
     // Switch configurations and states
-    SwitchConfig_t _switchConfigs[NUM_SWITCHES];
-    SwitchState_Runtime_t _switchStates[NUM_SWITCHES];
+    SwitchConfig_t _switchConfigs[NUM_SWITCHES > 0 ? NUM_SWITCHES : 1];
+    SwitchState_Runtime_t _switchStates[NUM_SWITCHES > 0 ? NUM_SWITCHES : 1];
     
-    // 3-position toggle configurations and states
-    Toggle3PosConfig_t _toggle3PosConfigs[NUM_3POS_TOGGLES];
-    Toggle3PosState_Runtime_t _toggle3PosStates[NUM_3POS_TOGGLES];
+    // Navigation switch configurations and states
+    NavSwitchConfig_t _navSwitchConfigs[NUM_NAV_SWITCHES > 0 ? NUM_NAV_SWITCHES : 1];
+    NavSwitchState_Runtime_t _navSwitchStates[NUM_NAV_SWITCHES > 0 ? NUM_NAV_SWITCHES : 1];
+    
+    // Encoder configurations and states
+    EncoderConfig_t _encoderConfigs[NUM_ENCODERS > 0 ? NUM_ENCODERS : 1];
+    EncoderState_Runtime_t _encoderStates[NUM_ENCODERS > 0 ? NUM_ENCODERS : 1];
     
     uint32_t _lastUpdateMs;
     
     /**
-     * Initialize switch configurations from defines
+     * Initialize configurations from defines
      */
     void initConfigs();
     
@@ -114,9 +212,14 @@ private:
     void updateSwitch(uint8_t index);
     
     /**
-     * Read and debounce a 3-position toggle
+     * Read and debounce a navigation switch
      */
-    void updateToggle3Pos(uint8_t index);
+    void updateNavSwitch(uint8_t index);
+    
+    /**
+     * Update encoder reading
+     */
+    void updateEncoder(uint8_t index);
 };
 
 // Global instance

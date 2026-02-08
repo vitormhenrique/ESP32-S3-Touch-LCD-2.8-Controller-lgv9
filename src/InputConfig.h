@@ -6,12 +6,14 @@
  * 
  * Hardware:
  * - 2x MCP23017 GPIO Expanders (16 pins each = 32 digital inputs)
- * - 3x ADS1X15 ADC (4 channels each = 12 analog inputs)
+ * - 2x ADS1115 ADC (4 channels each = 8 analog inputs)
  * 
  * Inputs:
  * - 2x Gimbals (4 axes total: 2 per gimbal)
  * - 2x Potentiometers
- * - Multiple switches (including 2x 3-position toggles)
+ * - 2x Navigation Switches (5 buttons each: Up, Down, Left, Right, Center)
+ * - 2x Rotary Encoders (A/B pins)
+ * - 2x Buttons
  ******************************************************************************/
 
 //=============================================================================
@@ -19,13 +21,13 @@
 //=============================================================================
 
 // MCP23017 addresses (A0, A1, A2 pins determine address 0x20-0x27)
-#define MCP23017_ADDR_1     0x20    // First expander
-#define MCP23017_ADDR_2     0x21    // Second expander
+#define MCP23017_ADDR_1     0x20    // First expander (Navigation 2, Encoder 2, Button 2)
+#define MCP23017_ADDR_2     0x21    // Second expander (Navigation 1, Encoder 1, Button 1)
 
 // ADS1X15 addresses (ADDR pin: GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B)
-#define ADS1X15_ADDR_1      0x48    // Gimbal 1 (left stick X/Y) + Gimbal 2 X
-#define ADS1X15_ADDR_2      0x49    // Gimbal 2 Y + Potentiometers
-#define ADS1X15_ADDR_3      0x4A    // Additional analog inputs (spare)
+#define ADS1X15_ADDR_1      0x48    // Gimbal 1 (X/Y)
+#define ADS1X15_ADDR_2      0x49    // Gimbal 2 (X/Y)
+#define ADS1X15_ADDR_3      0x4A    // Potentiometers (optional)
 
 //=============================================================================
 // Enums
@@ -51,6 +53,16 @@ typedef enum {
     SWITCH_TYPE_TOGGLE_3POS     // 3-position toggle (uses 2 pins)
 } SwitchType_t;
 
+/* Navigation switch directions */
+typedef enum {
+    NAV_UP = 0,
+    NAV_DOWN,
+    NAV_LEFT,
+    NAV_RIGHT,
+    NAV_CENTER,
+    NAV_DIR_COUNT
+} NavDirection_t;
+
 //=============================================================================
 // Structs
 //=============================================================================
@@ -72,6 +84,27 @@ typedef struct {
     uint8_t pin_down;           // Pin for DOWN position
     bool inverted;              // True if logic is inverted (pull-up)
 } Toggle3PosConfig_t;
+
+/* Configuration for a navigation switch (5-way: up, down, left, right, center) */
+typedef struct {
+    const char* name;           // Human-readable name (e.g., "NAV_1")
+    uint8_t expander;           // MCP23017 index (0 or 1)
+    uint8_t pin_up;             // Pin for UP direction
+    uint8_t pin_down;           // Pin for DOWN direction
+    uint8_t pin_left;           // Pin for LEFT direction
+    uint8_t pin_right;          // Pin for RIGHT direction
+    uint8_t pin_center;         // Pin for CENTER button
+    bool inverted;              // True if logic is inverted (pull-up)
+} NavSwitchConfig_t;
+
+/* Configuration for a rotary encoder */
+typedef struct {
+    const char* name;           // Human-readable name (e.g., "ENC_1")
+    uint8_t expander;           // MCP23017 index (0 or 1)
+    uint8_t pin_a;              // Pin for encoder A signal
+    uint8_t pin_b;              // Pin for encoder B signal
+    bool inverted;              // True to reverse direction
+} EncoderConfig_t;
 
 /* Configuration for an analog axis (gimbal or pot) */
 typedef struct {
@@ -99,6 +132,21 @@ typedef struct {
     uint32_t last_change_ms;        // Timestamp of last position change
 } Toggle3PosState_Runtime_t;
 
+/* Runtime state for navigation switch */
+typedef struct {
+    bool directions[NAV_DIR_COUNT];      // Current state of each direction
+    bool prev_directions[NAV_DIR_COUNT]; // Previous state for edge detection
+    uint32_t last_change_ms;             // Timestamp of last state change
+} NavSwitchState_Runtime_t;
+
+/* Runtime state for encoder */
+typedef struct {
+    int32_t position;           // Current encoder position
+    int32_t prev_position;      // Previous position (for change detection)
+    bool last_a;                // Last state of A pin
+    bool last_b;                // Last state of B pin
+} EncoderState_Runtime_t;
+
 /* Runtime state for an analog axis */
 typedef struct {
     int16_t raw;                // Raw ADC reading
@@ -107,12 +155,14 @@ typedef struct {
 } AnalogAxisState_t;
 
 //=============================================================================
-// Input Definitions - CONFIGURE YOUR HARDWARE HERE
+// Input Definitions - HARDWARE CONFIGURATION
 //=============================================================================
 
 // Number of each input type
-#define NUM_SWITCHES        12      // Adjust based on your switch count
-#define NUM_3POS_TOGGLES    2       // Two 3-position toggle switches
+#define NUM_SWITCHES        2       // 2 standalone buttons
+#define NUM_3POS_TOGGLES    0       // No 3-position toggles (using nav switches instead)
+#define NUM_NAV_SWITCHES    2       // 2 navigation switches (5-way each)
+#define NUM_ENCODERS        2       // 2 rotary encoders
 #define NUM_GIMBAL_AXES     4       // 2 gimbals x 2 axes each
 #define NUM_POTENTIOMETERS  2       // 2 potentiometers
 
@@ -120,58 +170,105 @@ typedef struct {
 #define NUM_ANALOG_AXES     (NUM_GIMBAL_AXES + NUM_POTENTIOMETERS)
 
 //=============================================================================
-// Switch Pin Assignments (MCP23017)
-// Expander 0: pins 0-15 (GPA0-7 = 0-7, GPB0-7 = 8-15)
-// Expander 1: pins 0-15 (GPA0-7 = 0-7, GPB0-7 = 8-15)
+// MCP23017 Pin Mapping
+// Expander 0 (0x20): pins 0-15 (GPA0-7 = 0-7, GPB0-7 = 8-15)
+// Expander 1 (0x21): pins 0-15 (GPA0-7 = 0-7, GPB0-7 = 8-15)
+// Note: Port A pins = 0-7, Port B pins = 8-15
 //=============================================================================
 
-// Standard 2-position switches configuration
+// Navigation Switch 2: MCP23017 address 0x20 (expander 0)
+// Left=A5(5), Down=A6(6), Right=A3(3), Up=A4(4), Center=A0(0)
+#define NAV2_PIN_UP      4   // A4
+#define NAV2_PIN_DOWN    6   // A6
+#define NAV2_PIN_LEFT    5   // A5
+#define NAV2_PIN_RIGHT   3   // A3
+#define NAV2_PIN_CENTER  0   // A0
+
+// Encoder 2: MCP23017 address 0x20 (expander 0)
+// A=A1(1), B=A2(2)
+#define ENC2_PIN_A       1   // A1
+#define ENC2_PIN_B       2   // A2
+
+// Button 2: MCP23017 address 0x20 (expander 0)
+#define BTN2_PIN         7   // A7
+
+// Navigation Switch 1: MCP23017 address 0x21 (expander 1)
+// Left=B5(13), Down=B6(14), Right=B3(11), Up=B4(12), Center=B0(8)
+#define NAV1_PIN_UP      12  // B4
+#define NAV1_PIN_DOWN    14  // B6
+#define NAV1_PIN_LEFT    13  // B5
+#define NAV1_PIN_RIGHT   11  // B3
+#define NAV1_PIN_CENTER  8   // B0
+
+// Encoder 1: MCP23017 address 0x21 (expander 1)
+// A=B1(9), B=B2(10)
+#define ENC1_PIN_A       9   // B1
+#define ENC1_PIN_B       10  // B2
+
+// Button 1: MCP23017 address 0x21 (expander 1)
+#define BTN1_PIN         15  // B7
+
+//=============================================================================
+// Switch Pin Assignments (MCP23017) - Standalone Buttons
+//=============================================================================
+
 // Format: { "NAME", expander, pin, type, inverted }
 #define SWITCH_CONFIGS { \
-    { "SW_A",    0,  0, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_B",    0,  1, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_C",    0,  2, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_D",    0,  3, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_E",    0,  4, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_F",    0,  5, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_G",    0,  6, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_H",    0,  7, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "BTN_1",   0,  8, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "BTN_2",   0,  9, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "BTN_3",   0, 10, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "BTN_4",   0, 11, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "BTN_1",   1, BTN1_PIN, SWITCH_TYPE_MOMENTARY, true }, \
+    { "BTN_2",   0, BTN2_PIN, SWITCH_TYPE_MOMENTARY, true }, \
 }
 
-// 3-position toggle switches configuration
-// Format: { "NAME", expander, pin_up, pin_down, inverted }
-// CENTER is detected when neither UP nor DOWN pin is active
-#define TOGGLE_3POS_CONFIGS { \
-    { "SW_3POS_1", 1, 0, 1, true }, \
-    { "SW_3POS_2", 1, 2, 3, true }, \
+//=============================================================================
+// Navigation Switch Configurations
+//=============================================================================
+
+// Format: { "NAME", expander, pin_up, pin_down, pin_left, pin_right, pin_center, inverted }
+#define NAV_SWITCH_CONFIGS { \
+    { "NAV_1", 1, NAV1_PIN_UP, NAV1_PIN_DOWN, NAV1_PIN_LEFT, NAV1_PIN_RIGHT, NAV1_PIN_CENTER, true }, \
+    { "NAV_2", 0, NAV2_PIN_UP, NAV2_PIN_DOWN, NAV2_PIN_LEFT, NAV2_PIN_RIGHT, NAV2_PIN_CENTER, true }, \
 }
+
+//=============================================================================
+// Encoder Configurations
+//=============================================================================
+
+// Format: { "NAME", expander, pin_a, pin_b, inverted }
+#define ENCODER_CONFIGS { \
+    { "ENC_1", 1, ENC1_PIN_A, ENC1_PIN_B, false }, \
+    { "ENC_2", 0, ENC2_PIN_A, ENC2_PIN_B, false }, \
+}
+
+//=============================================================================
+// 3-Position Toggle Configurations (empty - using nav switches)
+//=============================================================================
+
+#define TOGGLE_3POS_CONFIGS { }
 
 //=============================================================================
 // Analog Input Assignments (ADS1X15)
-// ADC 0: channels 0-3
-// ADC 1: channels 0-3
-// ADC 2: channels 0-3
+// ADC 0 (0x48): Gimbal 1 X/Y
+// ADC 1 (0x49): Gimbal 2 X/Y
+// ADC 2 (0x4A): Potentiometers (optional)
 //=============================================================================
 
 // Gimbal axes configuration
+// Gimbal 1 X: ADS1115 0x48 input A0 (adc 0, channel 0)
+// Gimbal 1 Y: ADS1115 0x48 input A1 (adc 0, channel 1)
+// Gimbal 2 X: ADS1115 0x49 input A0 (adc 1, channel 0)
+// Gimbal 2 Y: ADS1115 0x49 input A1 (adc 1, channel 1)
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 #define GIMBAL_CONFIGS { \
-    { "LEFT_X",   0, 0,  0, 32767, 16383, 200, false }, \
-    { "LEFT_Y",   0, 1,  0, 32767, 16383, 200, false }, \
-    { "RIGHT_X",  0, 2,  0, 32767, 16383, 200, false }, \
-    { "RIGHT_Y",  0, 3,  0, 32767, 16383, 200, false }, \
+    { "GIMBAL1_X", 0, 0,  0, 26000, 13000, 200, false }, \
+    { "GIMBAL1_Y", 0, 1,  0, 26000, 13000, 200, false }, \
+    { "GIMBAL2_X", 1, 0,  0, 26000, 13000, 200, false }, \
+    { "GIMBAL2_Y", 1, 1,  0, 26000, 13000, 200, false }, \
 }
 
-// Potentiometer configurations  
+// Potentiometer configurations (on spare ADC channels)
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
-// Note: center_raw and deadzone are ignored for pots (no center position)
 #define POT_CONFIGS { \
-    { "POT_1",    1, 0,  0, 32767, 0, 0, false }, \
-    { "POT_2",    1, 1,  0, 32767, 0, 0, false }, \
+    { "POT_1", 0, 2,  0, 26000, 0, 0, false }, \
+    { "POT_2", 0, 3,  0, 26000, 0, 0, false }, \
 }
 
 //=============================================================================
