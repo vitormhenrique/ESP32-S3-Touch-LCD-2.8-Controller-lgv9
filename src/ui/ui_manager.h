@@ -37,6 +37,17 @@ typedef void (*ui_screen_change_cb_t)(UIScreen_t screen);
 extern lv_obj_t *ui_MainScreen;
 
 //=============================================================================
+// Header Objects
+//=============================================================================
+
+extern lv_obj_t *ui_HeaderPanel;
+extern lv_obj_t *ui_TitleLabel;
+extern lv_obj_t *ui_StatusIcon;
+extern lv_obj_t *ui_BatteryIcon;
+extern lv_obj_t *ui_BatteryLabel;
+extern lv_obj_t *ui_ChargeIcon;
+
+//=============================================================================
 // Initialization Functions
 //=============================================================================
 
@@ -92,6 +103,23 @@ UI_Styles_t *ui_get_styles(void);
  * Update all UI elements (call in main loop)
  */
 void ui_update(void);
+
+//=============================================================================
+// Header Update Functions
+//=============================================================================
+
+/**
+ * Update battery display in header
+ * @param percent Battery percentage (0-100)
+ * @param state Battery state (charging, discharging, etc.)
+ */
+void ui_set_battery(uint8_t percent, BatteryState_t state);
+
+/**
+ * Update WiFi connection status in header
+ * @param connected true if WiFi is connected
+ */
+void ui_set_wifi_status(bool connected);
 
 //=============================================================================
 // Weak Callbacks (Override in main application)
