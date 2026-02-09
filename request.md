@@ -1,6 +1,4 @@
-make the following changes on my source code:
-1) Implement a navigation switch on my input manager, my controler has two of those, they have 4 directional swtiches, up, left, right, down and a center button.
-2) replicate the same scroll window that is implemented on the input panel on my gimbal panel, the first screen should maintain the two gimbals, the second one will have 2 navigation switches. the element should me implemented using modern UI and it should respond to the inputs mapped on my input manager, highlighting the appropriate button on the UI when a input is detected.
+
 3) on the telemetry screen, implement the same horizontal scroll, and the configuration for it will depend on what robot is loaded, but all robots should have the status screen, another panel with a rolling log, implement a screen for an hexapod using DYNAMIXEL MX-28AR servos, one panel should display servo information, Another panel should show robot IMU data, virtual horizon, yaw, pitch, row, and any other information that is relevant for an hexapod. 
 4) Change the setup screen title to a Config the Config screen will have a lto of buttons that will display basic settings for the radio. All configuration should be saved on ESP memory and survive reboots.
 5) Implement A screen calibration on the config, where the user should click 4 parts of the screen and display map should use that.
