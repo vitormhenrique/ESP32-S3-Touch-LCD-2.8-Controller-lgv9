@@ -10,6 +10,7 @@
 #include "BAT_Driver.h"
 #include "Wireless.h"
 #include "InputManager.h"
+#include "Settings.h"
 #include "ui_custom.h"
 #include "ui_custom_integration.h"
 
@@ -51,6 +52,8 @@ void setup()
   Audio_Init();
   LCD_Init();
   Lvgl_Init();
+  
+  Settings_Init();  // Initialize settings (memory-only)
 
   ui_custom_init();  // Use custom UI
 

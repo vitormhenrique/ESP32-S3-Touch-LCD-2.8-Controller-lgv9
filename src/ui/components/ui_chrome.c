@@ -80,20 +80,18 @@ void ui_create_nav_bar(lv_obj_t *parent)
     lv_obj_set_flex_align(ui_NavPanel, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(ui_NavPanel, 3, 0);
     
+    // Icons only - no text labels
     const char *nav_icons[] = {ICON_INPUT, ICON_TELEMETRY, ICON_SETTINGS};
-    const char *nav_labels[] = {"Input", "Telem", "Setup"};
     lv_obj_t **nav_btns[] = {&ui_NavBtnInput, &ui_NavBtnTelemetry, &ui_NavBtnSettings};
     
     for (int i = 0; i < 3; i++) {
         lv_obj_t *btn = lv_button_create(ui_NavPanel);
-        lv_obj_set_size(btn, 100, 24);
+        lv_obj_set_size(btn, 60, 24);
         lv_obj_add_event_cb(btn, nav_btn_event_cb, LV_EVENT_CLICKED, NULL);
         
         lv_obj_t *lbl = lv_label_create(btn);
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%s %s", nav_icons[i], nav_labels[i]);
-        lv_label_set_text(lbl, buf);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
+        lv_label_set_text(lbl, nav_icons[i]);
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
         lv_obj_center(lbl);
         
         ui_NavBtnLabels[i] = lbl;
