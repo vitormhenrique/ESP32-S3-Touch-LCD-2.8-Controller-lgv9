@@ -78,23 +78,36 @@ void ui_create_nav_bar(lv_obj_t *parent)
     lv_obj_set_style_border_side(ui_NavPanel, LV_BORDER_SIDE_TOP, 0);
     lv_obj_set_flex_flow(ui_NavPanel, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ui_NavPanel, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(ui_NavPanel, 3, 0);
+    lv_obj_set_style_pad_top(ui_NavPanel, 4, 0);
+    lv_obj_set_style_pad_bottom(ui_NavPanel, 6, 0);  // Extra padding at bottom
+    lv_obj_set_style_pad_hor(ui_NavPanel, 8, 0);
     
-    // Icons only - no text labels
+    // Icons with labels - improved touch targets
     const char *nav_icons[] = {ICON_INPUT, ICON_TELEMETRY, ICON_SETTINGS};
+    const char *nav_labels[] = {"Input", "Data", "Settings"};
     lv_obj_t **nav_btns[] = {&ui_NavBtnInput, &ui_NavBtnTelemetry, &ui_NavBtnSettings};
     
     for (int i = 0; i < 3; i++) {
         lv_obj_t *btn = lv_button_create(ui_NavPanel);
-        lv_obj_set_size(btn, 60, 24);
+        lv_obj_set_size(btn, 90, 28);
         lv_obj_add_event_cb(btn, nav_btn_event_cb, LV_EVENT_CLICKED, NULL);
+        lv_obj_set_style_radius(btn, 6, 0);
+        lv_obj_set_style_pad_all(btn, 0, 0);
+        
+        // Horizontal layout: icon + label
+        lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(btn, 4, 0);
+        
+        lv_obj_t *icon = lv_label_create(btn);
+        lv_label_set_text(icon, nav_icons[i]);
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_14, 0);
         
         lv_obj_t *lbl = lv_label_create(btn);
-        lv_label_set_text(lbl, nav_icons[i]);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
-        lv_obj_center(lbl);
+        lv_label_set_text(lbl, nav_labels[i]);
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_10, 0);
         
-        ui_NavBtnLabels[i] = lbl;
+        ui_NavBtnLabels[i] = icon;
         *nav_btns[i] = btn;
     }
 }

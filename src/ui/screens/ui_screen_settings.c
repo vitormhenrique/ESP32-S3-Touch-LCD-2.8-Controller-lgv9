@@ -101,14 +101,8 @@ static void create_main_menu(lv_obj_t *parent) {
     lv_obj_set_size(menu_main, lv_pct(100), lv_pct(100));
     lv_obj_set_style_bg_opa(menu_main, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(menu_main, 0, 0);
-    lv_obj_set_style_pad_all(menu_main, 4, 0);
+    lv_obj_set_style_pad_all(menu_main, 6, 0);
     lv_obj_remove_flag(menu_main, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *title = lv_label_create(menu_main);
-    lv_label_set_text(title, LV_SYMBOL_SETTINGS " Settings");
-    lv_obj_add_style(title, &style_text_primary, 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 2);
     
     typedef struct {
         const char *icon;
@@ -127,23 +121,33 @@ static void create_main_menu(lv_obj_t *parent) {
     
     for (int i = 0; i < n; i++) {
         lv_obj_t *btn = lv_button_create(menu_main);
-        lv_obj_set_size(btn, lv_pct(95), 26);
-        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 24 + i * 30);
+        lv_obj_set_size(btn, lv_pct(98), 28);
+        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 2 + i * 32);
         lv_obj_add_style(btn, &style_card, 0);
+        lv_obj_set_style_radius(btn, 8, 0);
+        lv_obj_set_style_pad_left(btn, 12, 0);
+        lv_obj_set_style_pad_right(btn, 8, 0);
         lv_obj_add_event_cb(btn, menu_btn_cb, LV_EVENT_CLICKED, (void*)(intptr_t)items[i].menu);
         
+        // Icon on the left with accent color
+        lv_obj_t *icon = lv_label_create(btn);
+        lv_label_set_text(icon, items[i].icon);
+        lv_obj_set_style_text_color(icon, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_14, 0);
+        lv_obj_align(icon, LV_ALIGN_LEFT_MID, 0, 0);
+        
+        // Label text
         lv_obj_t *lbl = lv_label_create(btn);
-        char buf[48];
-        snprintf(buf, sizeof(buf), "%s  %s", items[i].icon, items[i].label);
-        lv_label_set_text(lbl, buf);
+        lv_label_set_text(lbl, items[i].label);
         lv_obj_add_style(lbl, &style_text_primary, 0);
         lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
-        lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 8, 0);
+        lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, 0);
         
+        // Arrow on the right
         lv_obj_t *arrow = lv_label_create(btn);
         lv_label_set_text(arrow, LV_SYMBOL_RIGHT);
         lv_obj_add_style(arrow, &style_text_secondary, 0);
-        lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, -4, 0);
+        lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, 0, 0);
     }
 }
 

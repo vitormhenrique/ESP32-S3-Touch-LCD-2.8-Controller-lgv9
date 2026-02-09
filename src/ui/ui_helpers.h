@@ -76,7 +76,7 @@ extern "C" {
 
 // Layout heights
 #define UI_HEADER_HEIGHT        24
-#define UI_NAV_HEIGHT           30
+#define UI_NAV_HEIGHT           36
 #define UI_CONTENT_HEIGHT       (UI_SCREEN_HEIGHT - UI_HEADER_HEIGHT - UI_NAV_HEIGHT)
 #define INPUT_PANEL_HEIGHT      60
 #define GIMBAL_PANEL_HEIGHT     (UI_CONTENT_HEIGHT - INPUT_PANEL_HEIGHT)
