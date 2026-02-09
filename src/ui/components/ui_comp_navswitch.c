@@ -33,7 +33,7 @@ lv_obj_t* ui_create_nav_switch_widget(lv_obj_t *parent, lv_obj_t **indicators)
         {b_size, b_size, 0, offset, 8, LV_SYMBOL_DOWN},   // Down
         {b_size, b_size, -offset, 0, 8, LV_SYMBOL_LEFT},  // Left
         {b_size, b_size, offset, 0, 8, LV_SYMBOL_RIGHT},  // Right
-        {34, 34, 0, 0, LV_RADIUS_CIRCLE, LV_SYMBOL_BULLET}  // Center: Bigger ball (34px)
+        {b_size, b_size, 0, 0, LV_RADIUS_CIRCLE, LV_SYMBOL_BULLET}  // Center
     };
     
     for (int i = 0; i < 5; i++) {

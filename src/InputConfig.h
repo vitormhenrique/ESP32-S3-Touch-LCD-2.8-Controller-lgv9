@@ -111,7 +111,7 @@ typedef struct {
 //=============================================================================
 
 // Number of each input type
-#define NUM_SWITCHES        22      // 12 original + 10 Nav switches (2x5)
+#define NUM_SWITCHES        26      // 12 original + 10 Nav switches (2x5) + 4 Encoder pins
 #define NUM_3POS_TOGGLES    2       // Two 3-position toggle switches
 #define NUM_GIMBAL_AXES     4       // 2 gimbals x 2 axes each
 #define NUM_POTENTIOMETERS  2       // 2 potentiometers
@@ -128,35 +128,43 @@ typedef struct {
 // Standard 2-position switches configuration
 // Format: { "NAME", expander, pin, type, inverted }
 #define SWITCH_CONFIGS { \
-    { "SW_A",    0,  0, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_B",    0,  1, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_C",    0,  2, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_D",    0,  3, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_E",    0,  4, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_F",    0,  5, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_G",    0,  6, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_H",    0,  7, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "BTN_1",   0,  8, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "BTN_2",   0,  9, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "BTN_3",   0, 10, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "BTN_4",   0, 11, SWITCH_TYPE_MOMENTARY,   true }, \
-    /* Nav Switch 1 (Left) */ \
-    { "NAV1_U",  1,  4, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV1_D",  1,  5, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV1_L",  1,  6, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV1_R",  1,  7, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV1_C",  1,  8, SWITCH_TYPE_MOMENTARY,   true }, \
-    /* Nav Switch 2 (Right) */ \
-    { "NAV2_U",  1,  9, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV2_D",  1, 10, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV2_L",  1, 11, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV2_R",  1, 12, SWITCH_TYPE_MOMENTARY,   true }, \
-    { "NAV2_C",  1, 13, SWITCH_TYPE_MOMENTARY,   true }, \
+    /* Switches assigned to Expander 0 Port B (Pins 8-15) */ \
+    { "SW_A",    0,  8, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_B",    0,  9, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_C",    0, 10, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_D",    0, 11, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_E",    0, 12, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_F",    0, 13, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_G",    0, 14, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_H",    0, 15, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    /* Buttons */ \
+    { "BTN_1",   1, 15, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B7 */ \
+    { "BTN_2",   0,  7, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 0 A7 */ \
+    { "BTN_3",   1,  4, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 A4 */ \
+    { "BTN_4",   1,  5, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 A5 */ \
+    /* Nav Switch 1 (Left) - Expander 1 Port B */ \
+    { "NAV1_U",  1, 12, SWITCH_TYPE_MOMENTARY,   true }, /* B4 */ \
+    { "NAV1_D",  1, 14, SWITCH_TYPE_MOMENTARY,   true }, /* B6 */ \
+    { "NAV1_L",  1, 13, SWITCH_TYPE_MOMENTARY,   true }, /* B5 */ \
+    { "NAV1_R",  1, 11, SWITCH_TYPE_MOMENTARY,   true }, /* B3 */ \
+    { "NAV1_C",  1,  8, SWITCH_TYPE_MOMENTARY,   true }, /* B0 */ \
+    /* Nav Switch 2 (Right) - Expander 0 Port A */ \
+    { "NAV2_U",  0,  4, SWITCH_TYPE_MOMENTARY,   true }, /* A4 */ \
+    { "NAV2_D",  0,  6, SWITCH_TYPE_MOMENTARY,   true }, /* A6 */ \
+    { "NAV2_L",  0,  5, SWITCH_TYPE_MOMENTARY,   true }, /* A5 */ \
+    { "NAV2_R",  0,  3, SWITCH_TYPE_MOMENTARY,   true }, /* A3 */ \
+    { "NAV2_C",  0,  0, SWITCH_TYPE_MOMENTARY,   true }, /* A0 */ \
+    /* Encoders (Treated as switches for raw input) */ \
+    { "ENC1_A",  1,  9, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B1 */ \
+    { "ENC1_B",  1, 10, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B2 */ \
+    { "ENC2_A",  0,  1, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 0 A1 */ \
+    { "ENC2_B",  0,  2, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 0 A2 */ \
 }
 
 // 3-position toggle switches configuration
 // Format: { "NAME", expander, pin_up, pin_down, inverted }
 // CENTER is detected when neither UP nor DOWN pin is active
+// Assigned to Expander 1 Port A 0-3
 #define TOGGLE_3POS_CONFIGS { \
     { "SW_3POS_1", 1, 0, 1, true }, \
     { "SW_3POS_2", 1, 2, 3, true }, \
@@ -172,18 +180,18 @@ typedef struct {
 // Gimbal axes configuration
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 #define GIMBAL_CONFIGS { \
-    { "LEFT_X",   0, 0,  0, 32767, 16383, 200, false }, \
-    { "LEFT_Y",   0, 1,  0, 32767, 16383, 200, false }, \
-    { "RIGHT_X",  0, 2,  0, 32767, 16383, 200, false }, \
-    { "RIGHT_Y",  0, 3,  0, 32767, 16383, 200, false }, \
+    { "LEFT_X",   0, 0,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 0 */ \
+    { "LEFT_Y",   0, 1,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 1 */ \
+    { "RIGHT_X",  1, 0,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 0 */ \
+    { "RIGHT_Y",  1, 1,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 1 */ \
 }
 
 // Potentiometer configurations  
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 // Note: center_raw and deadzone are ignored for pots (no center position)
 #define POT_CONFIGS { \
-    { "POT_1",    1, 0,  0, 32767, 0, 0, false }, \
-    { "POT_2",    1, 1,  0, 32767, 0, 0, false }, \
+    { "POT_1",    1, 2,  0, 32767, 0, 0, false }, /* ADC 1 (0x49) Ch 2 */ \
+    { "POT_2",    1, 3,  0, 32767, 0, 0, false }, /* ADC 1 (0x49) Ch 3 */ \
 }
 
 //=============================================================================
