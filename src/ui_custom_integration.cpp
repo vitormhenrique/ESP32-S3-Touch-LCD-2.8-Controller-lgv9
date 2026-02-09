@@ -52,10 +52,31 @@ void ui_update_from_inputs(void)
     // Update Buttons (momentary switches)
     // Adjust the indices based on your InputConfig.h SWITCH_CONFIGS
     //=========================================================================
-    // Assuming switches 6-9 are your momentary buttons
+    // Assuming switches 8-11 are your momentary buttons
     for (uint8_t i = 0; i < 4; i++) {
-        ui_set_button(i, RCInput.isSwitchOn(6 + i));
+        ui_set_button(i, RCInput.isSwitchOn(8 + i));
     }
+    
+    //=========================================================================
+    // Update Nav Switches
+    // Nav 1: Indices 12-16 (U, D, L, R, C)
+    // Nav 2: Indices 17-21 (U, D, L, R, C)
+    //=========================================================================
+    ui_set_nav_switch(0, 
+        RCInput.isSwitchOn(12), // Up
+        RCInput.isSwitchOn(13), // Down
+        RCInput.isSwitchOn(14), // Left
+        RCInput.isSwitchOn(15), // Right
+        RCInput.isSwitchOn(16)  // Center
+    );
+    
+    ui_set_nav_switch(1, 
+        RCInput.isSwitchOn(17), // Up
+        RCInput.isSwitchOn(18), // Down
+        RCInput.isSwitchOn(19), // Left
+        RCInput.isSwitchOn(20), // Right
+        RCInput.isSwitchOn(21)  // Center
+    );
     
     //=========================================================================
     // Update Encoders

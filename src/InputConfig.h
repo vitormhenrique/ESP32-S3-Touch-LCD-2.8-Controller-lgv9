@@ -111,7 +111,7 @@ typedef struct {
 //=============================================================================
 
 // Number of each input type
-#define NUM_SWITCHES        12      // Adjust based on your switch count
+#define NUM_SWITCHES        22      // 12 original + 10 Nav switches (2x5)
 #define NUM_3POS_TOGGLES    2       // Two 3-position toggle switches
 #define NUM_GIMBAL_AXES     4       // 2 gimbals x 2 axes each
 #define NUM_POTENTIOMETERS  2       // 2 potentiometers
@@ -140,6 +140,18 @@ typedef struct {
     { "BTN_2",   0,  9, SWITCH_TYPE_MOMENTARY,   true }, \
     { "BTN_3",   0, 10, SWITCH_TYPE_MOMENTARY,   true }, \
     { "BTN_4",   0, 11, SWITCH_TYPE_MOMENTARY,   true }, \
+    /* Nav Switch 1 (Left) */ \
+    { "NAV1_U",  1,  4, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_D",  1,  5, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_L",  1,  6, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_R",  1,  7, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_C",  1,  8, SWITCH_TYPE_MOMENTARY,   true }, \
+    /* Nav Switch 2 (Right) */ \
+    { "NAV2_U",  1,  9, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_D",  1, 10, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_L",  1, 11, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_R",  1, 12, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_C",  1, 13, SWITCH_TYPE_MOMENTARY,   true }, \
 }
 
 // 3-position toggle switches configuration

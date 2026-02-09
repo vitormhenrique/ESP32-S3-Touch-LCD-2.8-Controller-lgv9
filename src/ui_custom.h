@@ -125,6 +125,8 @@ extern lv_obj_t *ui_GimbalLeft;
 extern lv_obj_t *ui_GimbalLeftDot;
 extern lv_obj_t *ui_GimbalRight;
 extern lv_obj_t *ui_GimbalRightDot;
+extern lv_obj_t *ui_NavPage;
+extern lv_obj_t *ui_NavSwitchIndicators[2][5]; // [NavIndex][Direction] (0=U, 1=D, 2=L, 3=R, 4=C)
 extern lv_obj_t *ui_InputControlsPanel;
 extern lv_obj_t *ui_Buttons[4];
 extern lv_obj_t *ui_BtnLabels[4];
@@ -168,6 +170,7 @@ ScreenType_t ui_get_current_screen(void);
 
 void ui_set_gimbal_left(int16_t x, int16_t y);
 void ui_set_gimbal_right(int16_t x, int16_t y);
+void ui_set_nav_switch(uint8_t index, bool up, bool down, bool left, bool right, bool center);
 void ui_set_button(uint8_t index, bool pressed);
 void ui_set_switch(uint8_t index, bool on);
 void ui_set_toggle3(uint8_t index, uint8_t position);
