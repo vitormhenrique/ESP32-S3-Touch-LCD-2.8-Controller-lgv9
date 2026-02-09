@@ -21,4 +21,4 @@ void example_increase_lvgl_tick(void *arg);
 void Lvgl_Init(void);                                   // Initialize with default rotation (0°)
 void Lvgl_InitWithRotation(lcd_rotation_t rotation);    // Initialize with specific hardware rotation
 void Lvgl_SetRotation(lcd_rotation_t rotation);         // Change rotation at runtime
-void Lvgl_Loop(void);
+uint32_t Lvgl_Loop(void);                               // Returns time until next handler call (0 = rendered)

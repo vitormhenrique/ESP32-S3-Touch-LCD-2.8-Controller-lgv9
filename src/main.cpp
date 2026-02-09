@@ -13,17 +13,25 @@
 #include "Settings.h"
 #include "ui_custom.h"
 #include "ui_custom_integration.h"
+#include "PerfMonitor.h"
 
 void DriverTask(void *parameter) {
   Wireless_Test2();
   Input_Init();  // Initialize InputManager
   
   while(1){
+    Perf_StartSection(PERF_COUNTER_DRIVER_LOOP);
+    
+    Perf_StartSection(PERF_COUNTER_INPUT_UPDATE);
     Input_Update();  // Update all inputs
+    Perf_EndSection(PERF_COUNTER_INPUT_UPDATE);
+    
     PWR_Loop();
     BAT_Get_Volts();
     PCF85063_Loop();
     QMI8658_Loop(); 
+    
+    Perf_EndSection(PERF_COUNTER_DRIVER_LOOP);
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
@@ -54,6 +62,7 @@ void setup()
   Lvgl_Init();
   
   Settings_Init();  // Initialize settings (memory-only)
+  Perf_Init();      // Initialize performance monitor (if DEBUG_PERF enabled)
 
   ui_custom_init();  // Use custom UI
 
@@ -62,7 +71,24 @@ void setup()
 
 void loop()
 {
-  Lvgl_Loop();
+  Perf_StartSection(PERF_COUNTER_MAIN_LOOP);
+  
+  Perf_StartSection(PERF_COUNTER_LVGL_LOOP);
+  uint32_t time_till_next = Lvgl_Loop();  // Returns ms until next handler should be called
+  Perf_EndSection(PERF_COUNTER_LVGL_LOOP);
+  
+  // Track actual renders (when LVGL did work - time_till_next is small when busy)
+  if (time_till_next < 10) {
+    Perf_Increment(PERF_COUNTER_LVGL_RENDER);
+  }
+  
+  Perf_StartSection(PERF_COUNTER_UI_UPDATE);
   ui_update_from_inputs();  // Update UI with input states
+  Perf_EndSection(PERF_COUNTER_UI_UPDATE);
+  
+  Perf_EndSection(PERF_COUNTER_MAIN_LOOP);
+  
+  Perf_CheckReport();  // Print report every 5 seconds (if DEBUG_PERF enabled)
+  
   vTaskDelay(pdMS_TO_TICKS(5));
 }
