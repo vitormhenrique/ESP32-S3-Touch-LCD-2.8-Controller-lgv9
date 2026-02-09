@@ -1,360 +1,405 @@
 /**
  * @file ui_screen_input.c
- * @brief Input Screen Implementation - Gimbals, Nav Switches, Encoders
+ * @brief Input Screen Implementation
  */
 
 #include "ui_screen_input.h"
 #include <stdio.h>
 
 //=============================================================================
-// Screen Objects
+// Objects
 //=============================================================================
 
 lv_obj_t *ui_InputScreen = NULL;
 
-// Page containers
-static lv_obj_t *ui_GimbalPanel = NULL;
-static lv_obj_t *ui_InputScrollPanel = NULL;
-static lv_obj_t *ui_GimbalPage = NULL;
-static lv_obj_t *ui_NavSwitchPage = NULL;
-
-// Gimbal displays
+// Top Fixed Panel Objects
 lv_obj_t *ui_GimbalLeft = NULL;
 lv_obj_t *ui_GimbalLeftDot = NULL;
 lv_obj_t *ui_GimbalRight = NULL;
 lv_obj_t *ui_GimbalRightDot = NULL;
-
-// Navigation switch displays
 lv_obj_t *ui_NavSwitch1Btns[5] = {NULL};
 lv_obj_t *ui_NavSwitch2Btns[5] = {NULL};
 
-// Encoder displays
-lv_obj_t *ui_Encoder1Value = NULL;
-lv_obj_t *ui_Encoder2Value = NULL;
-static lv_obj_t *ui_Encoder1Panel = NULL;
-static lv_obj_t *ui_Encoder2Panel = NULL;
-
-// Button displays
+// Bottom Scrollable Panel Objects
 lv_obj_t *ui_Button1 = NULL;
 lv_obj_t *ui_Button2 = NULL;
+lv_obj_t *ui_Button3 = NULL;
+lv_obj_t *ui_Button4 = NULL;
 
-// Potentiometer displays
+lv_obj_t *ui_Switch1 = NULL;
+lv_obj_t *ui_Switch2 = NULL;
+lv_obj_t *ui_Switch3 = NULL;
+lv_obj_t *ui_Switch4 = NULL;
+lv_obj_t *ui_Switch5 = NULL;
+lv_obj_t *ui_Switch6 = NULL;
+
+lv_obj_t *ui_Toggle1 = NULL;
+lv_obj_t *ui_Toggle2 = NULL;
+static lv_obj_t *ui_Toggle1Ind = NULL;
+static lv_obj_t *ui_Toggle2Ind = NULL;
+
 lv_obj_t *ui_Pot1Bar = NULL;
 lv_obj_t *ui_Pot1Value = NULL;
 lv_obj_t *ui_Pot2Bar = NULL;
 lv_obj_t *ui_Pot2Value = NULL;
 
-// Layout constants
-#define GIMBAL_PANEL_HEIGHT  (UI_CONTENT_HEIGHT - 60)
-#define INPUT_PANEL_HEIGHT   60
+lv_obj_t *ui_Encoder1Value = NULL;
+lv_obj_t *ui_Encoder2Value = NULL;
 
 //=============================================================================
-// Create Gimbal Page (Page 1 of scroll)
+// Helper Functions
 //=============================================================================
 
-static void create_gimbal_page(lv_obj_t *page)
+static lv_obj_t* create_switch_shim(lv_obj_t *parent, const char* label_text)
 {
-    // Create gimbal row
-    lv_obj_t *gimbal_row = lv_obj_create(page);
-    lv_obj_set_size(gimbal_row, UI_SCREEN_WIDTH - 8, GIMBAL_PANEL_HEIGHT - 8);
-    lv_obj_align(gimbal_row, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_opa(gimbal_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(gimbal_row, 0, 0);
-    lv_obj_set_style_pad_all(gimbal_row, 0, 0);
-    lv_obj_remove_flag(gimbal_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(gimbal_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(gimbal_row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *cont = lv_obj_create(parent);
+    lv_obj_set_size(cont, 60, 40);
+    lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(cont, 0, 0);
+    lv_obj_set_style_pad_all(cont, 0, 0);
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *sw = lv_obj_create(cont);
+    lv_obj_set_size(sw, 40, 20);
+    lv_obj_add_style(sw, &ui_styles.switch_off, 0);
+
+    lv_obj_t *lbl = lv_label_create(cont);
+    lv_label_set_text(lbl, label_text);
+    lv_obj_add_style(lbl, &ui_styles.text_small, 0);
     
-    // Create left gimbal
-    ui_GimbalLeft = ui_create_gimbal(gimbal_row, &ui_GimbalLeftDot, "Gimbal 1");
+    return sw;
+}
+
+static lv_obj_t* create_toggle_shim(lv_obj_t *parent, const char* label_text, lv_obj_t **indicator)
+{
+    lv_obj_t *cont = lv_obj_create(parent);
+    lv_obj_set_size(cont, 40, 70);
+    lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(cont, 0, 0);
+    lv_obj_set_style_pad_all(cont, 0, 0);
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
-    // Create right gimbal
-    ui_GimbalRight = ui_create_gimbal(gimbal_row, &ui_GimbalRightDot, "Gimbal 2");
+    lv_obj_t *bg = lv_obj_create(cont);
+    lv_obj_set_size(bg, 20, 50);
+    lv_obj_add_style(bg, &ui_styles.toggle3_bg, 0);
+
+    *indicator = lv_obj_create(bg);
+    lv_obj_set_size(*indicator, 14, 14);
+    lv_obj_add_style(*indicator, &ui_styles.toggle3_indicator, 0);
+    lv_obj_align(*indicator, LV_ALIGN_TOP_MID, 0, 0); // Default Top
+
+    lv_obj_t *lbl = lv_label_create(cont);
+    lv_label_set_text(lbl, label_text);
+    lv_obj_add_style(lbl, &ui_styles.text_small, 0);
+
+    return bg;
+}
+
+static lv_obj_t* create_button_shim(lv_obj_t *parent, const char* label_text)
+{
+    lv_obj_t *btn = lv_obj_create(parent);
+    lv_obj_set_size(btn, 60, 40);
+    lv_obj_add_style(btn, &ui_styles.btn_default, 0);
+    
+    lv_obj_t *lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, label_text);
+    lv_obj_center(lbl);
+    lv_obj_add_style(lbl, &ui_styles.text_primary, 0);
+    
+    return btn;
+}
+
+static void create_pot_bar_shim(lv_obj_t *parent, const char* label_text, lv_obj_t **bar, lv_obj_t **value_label)
+{
+    lv_obj_t *cont = lv_obj_create(parent);
+    lv_obj_set_size(cont, 140, 40);
+    lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(cont, 0, 0);
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(cont, 0, 0);
+    lv_obj_set_style_pad_gap(cont, 10, 0);
+
+    lv_obj_t *lbl = lv_label_create(cont);
+    lv_label_set_text(lbl, label_text);
+    lv_obj_add_style(lbl, &ui_styles.text_small, 0);
+    lv_obj_set_width(lbl, 20);
+
+    *bar = lv_bar_create(cont);
+    lv_obj_set_size(*bar, 80, 12);
+    lv_obj_add_style(*bar, &ui_styles.bar_bg, LV_PART_MAIN);
+    lv_obj_add_style(*bar, &ui_styles.bar_indicator, LV_PART_INDICATOR);
+    lv_bar_set_range(*bar, 0, 100);
+
+    *value_label = lv_label_create(cont);
+    lv_label_set_text(*value_label, "0%");
+    lv_obj_add_style(*value_label, &ui_styles.text_small, 0);
+}
+
+static void create_encoder_display_shim(lv_obj_t *parent, const char* label_text, lv_obj_t **value_label)
+{
+    lv_obj_t *cont = lv_obj_create(parent);
+    lv_obj_set_size(cont, 70, 40);
+    lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(cont, 0, 0);
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(cont, 0, 0);
+
+    *value_label = lv_label_create(cont);
+    lv_label_set_text(*value_label, "0");
+    lv_obj_add_style(*value_label, &ui_styles.text_primary, 0);
+    
+    lv_obj_t *lbl = lv_label_create(cont);
+    lv_label_set_text(lbl, label_text);
+    lv_obj_add_style(lbl, &ui_styles.text_small, 0);
 }
 
 //=============================================================================
-// Create Nav Switch Page (Page 2 of scroll)
-//=============================================================================
-
-static void create_nav_switch_page(lv_obj_t *page)
-{
-    // Create nav switch row
-    lv_obj_t *nav_row = lv_obj_create(page);
-    lv_obj_set_size(nav_row, UI_SCREEN_WIDTH - 8, GIMBAL_PANEL_HEIGHT - 8);
-    lv_obj_align(nav_row, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_opa(nav_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(nav_row, 0, 0);
-    lv_obj_set_style_pad_all(nav_row, 0, 0);
-    lv_obj_remove_flag(nav_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(nav_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(nav_row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    // Create nav switch 1
-    ui_create_nav_switch_widget(nav_row, ui_NavSwitch1Btns, "Nav 1");
-    
-    // Create nav switch 2
-    ui_create_nav_switch_widget(nav_row, ui_NavSwitch2Btns, "Nav 2");
-}
-
-//=============================================================================
-// Create Bottom Control Panel
-//=============================================================================
-
-static void create_control_panel(lv_obj_t *parent)
-{
-    // Create control row
-    lv_obj_t *control_row = lv_obj_create(parent);
-    lv_obj_set_size(control_row, UI_SCREEN_WIDTH - 8, INPUT_PANEL_HEIGHT - 8);
-    lv_obj_align(control_row, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_opa(control_row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(control_row, 0, 0);
-    lv_obj_set_style_pad_all(control_row, 0, 0);
-    lv_obj_remove_flag(control_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(control_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(control_row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    
-    // Button 1
-    lv_obj_t *btn1_cont = lv_obj_create(control_row);
-    lv_obj_set_size(btn1_cont, 34, INPUT_PANEL_HEIGHT - 12);
-    lv_obj_set_style_bg_opa(btn1_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(btn1_cont, 0, 0);
-    lv_obj_set_style_pad_all(btn1_cont, 0, 0);
-    lv_obj_remove_flag(btn1_cont, LV_OBJ_FLAG_SCROLLABLE);
-    
-    ui_Button1 = lv_obj_create(btn1_cont);
-    lv_obj_set_size(ui_Button1, 30, 28);
-    lv_obj_align(ui_Button1, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_add_style(ui_Button1, &ui_styles.btn_default, 0);
-    lv_obj_remove_flag(ui_Button1, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *btn1_lbl = ui_create_label_small(btn1_cont, "B1");
-    lv_obj_align(btn1_lbl, LV_ALIGN_BOTTOM_MID, 0, 0);
-    
-    // Button 2
-    lv_obj_t *btn2_cont = lv_obj_create(control_row);
-    lv_obj_set_size(btn2_cont, 34, INPUT_PANEL_HEIGHT - 12);
-    lv_obj_set_style_bg_opa(btn2_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(btn2_cont, 0, 0);
-    lv_obj_set_style_pad_all(btn2_cont, 0, 0);
-    lv_obj_remove_flag(btn2_cont, LV_OBJ_FLAG_SCROLLABLE);
-    
-    ui_Button2 = lv_obj_create(btn2_cont);
-    lv_obj_set_size(ui_Button2, 30, 28);
-    lv_obj_align(ui_Button2, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_add_style(ui_Button2, &ui_styles.btn_default, 0);
-    lv_obj_remove_flag(ui_Button2, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *btn2_lbl = ui_create_label_small(btn2_cont, "B2");
-    lv_obj_align(btn2_lbl, LV_ALIGN_BOTTOM_MID, 0, 0);
-    
-    // Encoder 1
-    ui_Encoder1Panel = lv_obj_create(control_row);
-    lv_obj_set_size(ui_Encoder1Panel, 50, INPUT_PANEL_HEIGHT - 12);
-    lv_obj_add_style(ui_Encoder1Panel, &ui_styles.card, 0);
-    lv_obj_remove_flag(ui_Encoder1Panel, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *enc1_lbl = ui_create_label_small(ui_Encoder1Panel, "E1");
-    lv_obj_align(enc1_lbl, LV_ALIGN_TOP_MID, 0, 0);
-    
-    ui_Encoder1Value = ui_create_label(ui_Encoder1Panel, "0");
-    lv_obj_set_style_text_font(ui_Encoder1Value, &lv_font_montserrat_12, 0);
-    lv_obj_align(ui_Encoder1Value, LV_ALIGN_BOTTOM_MID, 0, -2);
-    
-    // Encoder 2
-    ui_Encoder2Panel = lv_obj_create(control_row);
-    lv_obj_set_size(ui_Encoder2Panel, 50, INPUT_PANEL_HEIGHT - 12);
-    lv_obj_add_style(ui_Encoder2Panel, &ui_styles.card, 0);
-    lv_obj_remove_flag(ui_Encoder2Panel, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *enc2_lbl = ui_create_label_small(ui_Encoder2Panel, "E2");
-    lv_obj_align(enc2_lbl, LV_ALIGN_TOP_MID, 0, 0);
-    
-    ui_Encoder2Value = ui_create_label(ui_Encoder2Panel, "0");
-    lv_obj_set_style_text_font(ui_Encoder2Value, &lv_font_montserrat_12, 0);
-    lv_obj_align(ui_Encoder2Value, LV_ALIGN_BOTTOM_MID, 0, -2);
-    
-    // Pot 1
-    lv_obj_t *pot1_cont = lv_obj_create(control_row);
-    lv_obj_set_size(pot1_cont, 50, INPUT_PANEL_HEIGHT - 12);
-    lv_obj_set_style_bg_opa(pot1_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(pot1_cont, 0, 0);
-    lv_obj_set_style_pad_all(pot1_cont, 0, 0);
-    lv_obj_remove_flag(pot1_cont, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *pot1_lbl = ui_create_label_small(pot1_cont, "P1");
-    lv_obj_align(pot1_lbl, LV_ALIGN_TOP_MID, 0, 0);
-    
-    ui_Pot1Bar = lv_bar_create(pot1_cont);
-    lv_obj_set_size(ui_Pot1Bar, 44, 8);
-    lv_obj_align(ui_Pot1Bar, LV_ALIGN_CENTER, 0, 2);
-    lv_bar_set_range(ui_Pot1Bar, 0, 1000);
-    lv_bar_set_value(ui_Pot1Bar, 500, LV_ANIM_OFF);
-    lv_obj_add_style(ui_Pot1Bar, &ui_styles.bar_bg, LV_PART_MAIN);
-    lv_obj_add_style(ui_Pot1Bar, &ui_styles.bar_indicator, LV_PART_INDICATOR);
-    
-    ui_Pot1Value = ui_create_label_small(pot1_cont, "50%");
-    lv_obj_align(ui_Pot1Value, LV_ALIGN_BOTTOM_MID, 0, 0);
-    
-    // Pot 2
-    lv_obj_t *pot2_cont = lv_obj_create(control_row);
-    lv_obj_set_size(pot2_cont, 50, INPUT_PANEL_HEIGHT - 12);
-    lv_obj_set_style_bg_opa(pot2_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(pot2_cont, 0, 0);
-    lv_obj_set_style_pad_all(pot2_cont, 0, 0);
-    lv_obj_remove_flag(pot2_cont, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *pot2_lbl = ui_create_label_small(pot2_cont, "P2");
-    lv_obj_align(pot2_lbl, LV_ALIGN_TOP_MID, 0, 0);
-    
-    ui_Pot2Bar = lv_bar_create(pot2_cont);
-    lv_obj_set_size(ui_Pot2Bar, 44, 8);
-    lv_obj_align(ui_Pot2Bar, LV_ALIGN_CENTER, 0, 2);
-    lv_bar_set_range(ui_Pot2Bar, 0, 1000);
-    lv_bar_set_value(ui_Pot2Bar, 500, LV_ANIM_OFF);
-    lv_obj_add_style(ui_Pot2Bar, &ui_styles.bar_bg, LV_PART_MAIN);
-    lv_obj_add_style(ui_Pot2Bar, &ui_styles.bar_indicator, LV_PART_INDICATOR);
-    
-    ui_Pot2Value = ui_create_label_small(pot2_cont, "50%");
-    lv_obj_align(ui_Pot2Value, LV_ALIGN_BOTTOM_MID, 0, 0);
-}
-
-//=============================================================================
-// Public Functions
+// Implementation
 //=============================================================================
 
 void ui_input_screen_create(lv_obj_t *parent)
 {
+    ui_styles_init();
+
     ui_InputScreen = lv_obj_create(parent);
-    lv_obj_set_size(ui_InputScreen, lv_pct(100), lv_pct(100));
+    lv_obj_set_size(ui_InputScreen, UI_SCREEN_WIDTH, UI_CONTENT_HEIGHT);
     lv_obj_set_style_bg_opa(ui_InputScreen, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(ui_InputScreen, 0, 0);
     lv_obj_set_style_pad_all(ui_InputScreen, 0, 0);
-    lv_obj_remove_flag(ui_InputScreen, LV_OBJ_FLAG_SCROLLABLE);
-    
-    // Create scrollable panel for gimbals/nav switches
-    ui_InputScrollPanel = ui_create_scroll_container(ui_InputScreen, UI_SCREEN_WIDTH, GIMBAL_PANEL_HEIGHT, 2);
-    lv_obj_align(ui_InputScrollPanel, LV_ALIGN_TOP_MID, 0, 0);
-    
-    // Create page 1 (Gimbals)
-    ui_GimbalPage = lv_obj_create(ui_InputScrollPanel);
-    lv_obj_set_size(ui_GimbalPage, UI_SCREEN_WIDTH, GIMBAL_PANEL_HEIGHT - 4);
-    lv_obj_set_pos(ui_GimbalPage, 0, 0);
-    lv_obj_set_style_bg_opa(ui_GimbalPage, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(ui_GimbalPage, 0, 0);
-    lv_obj_set_style_pad_all(ui_GimbalPage, 2, 0);
-    lv_obj_remove_flag(ui_GimbalPage, LV_OBJ_FLAG_SCROLLABLE);
-    create_gimbal_page(ui_GimbalPage);
-    
-    // Create page 2 (Nav Switches)
-    ui_NavSwitchPage = lv_obj_create(ui_InputScrollPanel);
-    lv_obj_set_size(ui_NavSwitchPage, UI_SCREEN_WIDTH, GIMBAL_PANEL_HEIGHT - 4);
-    lv_obj_set_pos(ui_NavSwitchPage, UI_SCREEN_WIDTH, 0);
-    lv_obj_set_style_bg_opa(ui_NavSwitchPage, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(ui_NavSwitchPage, 0, 0);
-    lv_obj_set_style_pad_all(ui_NavSwitchPage, 2, 0);
-    lv_obj_remove_flag(ui_NavSwitchPage, LV_OBJ_FLAG_SCROLLABLE);
-    create_nav_switch_page(ui_NavSwitchPage);
-    
-    // Create bottom control panel
-    ui_GimbalPanel = ui_create_panel(ui_InputScreen, UI_SCREEN_WIDTH, INPUT_PANEL_HEIGHT);
-    lv_obj_align(ui_GimbalPanel, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_set_style_border_side(ui_GimbalPanel, LV_BORDER_SIDE_TOP, 0);
-    create_control_panel(ui_GimbalPanel);
+    lv_obj_set_style_border_width(ui_InputScreen, 0, 0);
+    lv_obj_clear_flag(ui_InputScreen, LV_OBJ_FLAG_SCROLLABLE);
+
+    //---------------------------------------------------------
+    // Top Panel: Gimbals + Nav Switches
+    // Height: ~120px
+    //---------------------------------------------------------
+    lv_obj_t *top_panel = lv_obj_create(ui_InputScreen);
+    lv_obj_set_size(top_panel, UI_SCREEN_WIDTH, 120);
+    lv_obj_align(top_panel, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_opa(top_panel, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(top_panel, 0, 0);
+    lv_obj_set_style_pad_all(top_panel, 5, 0);
+    lv_obj_clear_flag(top_panel, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Left Gimbal
+    ui_GimbalLeft = ui_create_gimbal(top_panel, &ui_GimbalLeftDot, "Gimbal L");
+    lv_obj_align(ui_GimbalLeft, LV_ALIGN_LEFT_MID, 10, 0);
+
+    // Left Nav Switch
+    lv_obj_t *nav1 = ui_create_nav_switch_widget(top_panel, ui_NavSwitch1Btns, "Nav L");
+    lv_obj_align(nav1, LV_ALIGN_LEFT_MID, 110, 0);
+
+    // Right Gimbal
+    ui_GimbalRight = ui_create_gimbal(top_panel, &ui_GimbalRightDot, "Gimbal R");
+    lv_obj_align(ui_GimbalRight, LV_ALIGN_RIGHT_MID, -10, 0);
+
+    // Right Nav Switch
+    lv_obj_t *nav2 = ui_create_nav_switch_widget(top_panel, ui_NavSwitch2Btns, "Nav R");
+    lv_obj_align(nav2, LV_ALIGN_RIGHT_MID, -110, 0);
+
+    //---------------------------------------------------------
+    // Bottom Scrollable Panel
+    // Height: Remainder (~120px)
+    //---------------------------------------------------------
+    lv_obj_t *bottom_panel = lv_obj_create(ui_InputScreen);
+    lv_obj_set_size(bottom_panel, UI_SCREEN_WIDTH, UI_CONTENT_HEIGHT - 120);
+    lv_obj_align(bottom_panel, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(bottom_panel, lv_color_hex(0x202020), 0);
+    lv_obj_set_style_bg_opa(bottom_panel, LV_OPA_COVER, 0);
+    lv_obj_set_flex_flow(bottom_panel, LV_FLEX_FLOW_ROW);
+    lv_obj_set_scroll_snap_x(bottom_panel, LV_SCROLL_SNAP_CENTER);
+    lv_obj_add_flag(bottom_panel, LV_OBJ_FLAG_SCROLL_ONE);
+    lv_obj_set_style_pad_all(bottom_panel, 0, 0);
+    lv_obj_set_style_pad_gap(bottom_panel, 0, 0);
+    lv_obj_set_style_border_width(bottom_panel, 1, 0);
+    lv_obj_set_style_border_color(bottom_panel, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_side(bottom_panel, LV_BORDER_SIDE_TOP, 0);
+
+    //---------------------------------------------------------
+    // PAGE 1: Switches (1-3), Toggles, Buttons
+    //---------------------------------------------------------
+    lv_obj_t *page1 = lv_obj_create(bottom_panel);
+    lv_obj_set_width(page1, lv_pct(100)); // Full width of parent content
+    lv_obj_set_height(page1, lv_pct(100));
+    //lv_obj_set_flex_shrink(page1, 0); // Don't shrink in row
+    lv_obj_set_style_bg_opa(page1, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(page1, 0, 0);
+    lv_obj_set_flex_flow(page1, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(page1, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(page1, 5, 0);
+    lv_obj_set_style_pad_gap(page1, 10, 0);
+
+    // Row 1: Buttons
+    ui_Button1 = create_button_shim(page1, "B1");
+    ui_Button2 = create_button_shim(page1, "B2");
+    ui_Button3 = create_button_shim(page1, "B3");
+    ui_Button4 = create_button_shim(page1, "B4");
+
+    // Row 2: Toggles & Switches
+    // T1, T2
+    ui_Toggle1 = create_toggle_shim(page1, "T1", &ui_Toggle1Ind);
+    ui_Toggle2 = create_toggle_shim(page1, "T2", &ui_Toggle2Ind);
+
+    // S1, S2, S3
+    ui_Switch1 = create_switch_shim(page1, "S1");
+    ui_Switch2 = create_switch_shim(page1, "S2");
+    ui_Switch3 = create_switch_shim(page1, "S3");
+
+    //---------------------------------------------------------
+    // PAGE 2: Switches (4-6), Pots, Encoders
+    //---------------------------------------------------------
+    lv_obj_t *page2 = lv_obj_create(bottom_panel);
+    lv_obj_set_width(page2, lv_pct(100)); // Full width of parent content
+    lv_obj_set_height(page2, lv_pct(100));
+    //lv_obj_set_flex_shrink(page2, 0);
+    lv_obj_set_style_bg_opa(page2, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(page2, 0, 0);
+    lv_obj_set_flex_flow(page2, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(page2, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(page2, 5, 0);
+    lv_obj_set_style_pad_gap(page2, 5, 0); // Tighter gap for pots
+
+    // Switches S4, S5, S6
+    ui_Switch4 = create_switch_shim(page2, "S4");
+    ui_Switch5 = create_switch_shim(page2, "S5");
+    ui_Switch6 = create_switch_shim(page2, "S6");
+
+    // Encoders
+    create_encoder_display_shim(page2, "E1", &ui_Encoder1Value);
+    create_encoder_display_shim(page2, "E2", &ui_Encoder2Value);
+
+    // Pots (Full width almost)
+    create_pot_bar_shim(page2, "P1", &ui_Pot1Bar, &ui_Pot1Value);
+    create_pot_bar_shim(page2, "P2", &ui_Pot2Bar, &ui_Pot2Value);
+
+    // Initially hide
+    lv_obj_add_flag(ui_InputScreen, LV_OBJ_FLAG_HIDDEN);
 }
 
 void ui_input_screen_show(bool show)
 {
-    if (ui_InputScreen) {
-        if (show) {
-            lv_obj_remove_flag(ui_InputScreen, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(ui_InputScreen, LV_OBJ_FLAG_HIDDEN);
-        }
+    if (show) {
+        lv_obj_clear_flag(ui_InputScreen, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(ui_InputScreen, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
 void ui_input_set_gimbal(uint8_t index, int16_t x, int16_t y)
 {
+    // index 0=Left, 1=Right
+    // x, y: -100 to 100
+    // Visual range: 70x70 gimbal size (defined in ui_common.h UI_GIMBAL_SIZE)
+    // Dot size: UI_GIMBAL_DOT_SIZE (14)
+    // Max movement: (70 - 14) / 2 = 28 pixel radius.
+
     lv_obj_t *dot = (index == 0) ? ui_GimbalLeftDot : ui_GimbalRightDot;
     if (!dot) return;
-    
-    int16_t gimbal_size = UI_GIMBAL_SIZE;
-    int16_t dot_size = UI_GIMBAL_DOT_SIZE;
-    int16_t max_offset = (gimbal_size - dot_size) / 2 - 2;
-    int16_t px = (x * max_offset) / 1000;
-    int16_t py = (-y * max_offset) / 1000;
+
+    // Use constants from ui_common.h if possible, or hardcode based on known size
+    // UI_GIMBAL_SIZE is 70
+    // UI_GIMBAL_DOT_SIZE is 14
+    int max_r = (UI_GIMBAL_SIZE - UI_GIMBAL_DOT_SIZE) / 2;
+
+    int16_t px = (x * max_r) / 100;
+    int16_t py = (y * max_r) / 100; // Y up is positive usually
+    py = -py; // Screen Y is down
+
     lv_obj_align(dot, LV_ALIGN_CENTER, px, py);
 }
 
 void ui_input_set_nav_switch(uint8_t index, bool up, bool down, bool left, bool right, bool center)
 {
     lv_obj_t **btns = (index == 0) ? ui_NavSwitch1Btns : ui_NavSwitch2Btns;
-    
-    if (!btns[0]) return;
-    
-    // Update each button's style based on state
-    // Order: up, down, left, right, center
+    if (!btns[0]) return; // Check one
+
+    // 0=Up, 1=Down, 2=Left, 3=Right, 4=Center
     bool states[5] = {up, down, left, right, center};
-    
+
     for (int i = 0; i < 5; i++) {
-        if (btns[i]) {
-            lv_obj_remove_style(btns[i], &ui_styles.btn_default, 0);
-            lv_obj_remove_style(btns[i], &ui_styles.btn_highlight, 0);
-            
-            if (states[i]) {
-                lv_obj_add_style(btns[i], &ui_styles.btn_highlight, 0);
-            } else {
-                lv_obj_add_style(btns[i], &ui_styles.btn_default, 0);
-            }
-            
-            // Keep center button circular
-            if (i == 4) {
-                lv_obj_set_style_radius(btns[i], LV_RADIUS_CIRCLE, 0);
-            }
+        if (states[i]) {
+            // Apply highlight style
+             lv_obj_add_style(btns[i], &ui_styles.btn_highlight, 0);
+        } else {
+             lv_obj_remove_style(btns[i], &ui_styles.btn_highlight, 0);
         }
     }
 }
 
-void ui_input_set_encoder(uint8_t index, int32_t value)
-{
-    lv_obj_t *val_label = (index == 0) ? ui_Encoder1Value : ui_Encoder2Value;
-    if (!val_label) return;
-    
-    char buf[12];
-    snprintf(buf, sizeof(buf), "%ld", (long)value);
-    lv_label_set_text(val_label, buf);
-}
-
 void ui_input_set_button(uint8_t index, bool pressed)
 {
-    lv_obj_t *btn = (index == 0) ? ui_Button1 : ui_Button2;
+    lv_obj_t *btn = NULL;
+    switch(index) {
+        case 0: btn = ui_Button1; break;
+        case 1: btn = ui_Button2; break;
+        case 2: btn = ui_Button3; break;
+        case 3: btn = ui_Button4; break;
+    }
     if (!btn) return;
-    
-    lv_obj_remove_style(btn, &ui_styles.btn_default, 0);
-    lv_obj_remove_style(btn, &ui_styles.btn_pressed, 0);
-    
+
     if (pressed) {
         lv_obj_add_style(btn, &ui_styles.btn_pressed, 0);
     } else {
-        lv_obj_add_style(btn, &ui_styles.btn_default, 0);
+        lv_obj_remove_style(btn, &ui_styles.btn_pressed, 0);
+    }
+}
+
+void ui_input_set_switch(uint8_t index, bool active)
+{
+    lv_obj_t *sw = NULL;
+    switch(index) {
+        case 0: sw = ui_Switch1; break;
+        case 1: sw = ui_Switch2; break;
+        case 2: sw = ui_Switch3; break;
+        case 3: sw = ui_Switch4; break;
+        case 4: sw = ui_Switch5; break;
+        case 5: sw = ui_Switch6; break;
+    }
+    if (!sw) return;
+
+    if (active) {
+        lv_obj_add_style(sw, &ui_styles.switch_on, 0);
+        lv_obj_remove_style(sw, &ui_styles.switch_off, 0);
+    } else {
+        lv_obj_add_style(sw, &ui_styles.switch_off, 0);
+        lv_obj_remove_style(sw, &ui_styles.switch_on, 0);
+    }
+}
+
+void ui_input_set_toggle(uint8_t index, uint8_t state)
+{
+    lv_obj_t *ind = (index == 0) ? ui_Toggle1Ind : ui_Toggle2Ind;
+    if (!ind) return;
+
+    // state: 0=Top, 1=Middle, 2=Bottom
+    
+    // Reset styles
+    lv_obj_remove_style_all(ind);
+    lv_obj_add_style(ind, &ui_styles.toggle3_indicator, 0);
+
+    if (state == 0) {
+        lv_obj_align(ind, LV_ALIGN_TOP_MID, 0, 2);
+    } else if (state == 1) {
+        lv_obj_align(ind, LV_ALIGN_CENTER, 0, 0);
+    } else {
+        lv_obj_align(ind, LV_ALIGN_BOTTOM_MID, 0, -2);
     }
 }
 
 void ui_input_set_pot(uint8_t index, int16_t value)
 {
     lv_obj_t *bar = (index == 0) ? ui_Pot1Bar : ui_Pot2Bar;
-    lv_obj_t *val_label = (index == 0) ? ui_Pot1Value : ui_Pot2Value;
+    lv_obj_t *lbl = (index == 0) ? ui_Pot1Value : ui_Pot2Value;
     
-    if (!bar) return;
-    
-    if (value < 0) value = 0;
-    if (value > 1000) value = 1000;
-    
-    lv_bar_set_value(bar, value, LV_ANIM_OFF);
-    
-    if (val_label) {
-        char buf[8];
-        snprintf(buf, sizeof(buf), "%d%%", value / 10);
-        lv_label_set_text(val_label, buf);
-    }
+    if (bar) lv_bar_set_value(bar, value, LV_ANIM_OFF);
+    if (lbl) lv_label_set_text_fmt(lbl, "%d%%", value);
+}
+
+void ui_input_set_encoder(uint8_t index, int32_t value)
+{
+    lv_obj_t *lbl = (index == 0) ? ui_Encoder1Value : ui_Encoder2Value;
+    if (lbl) lv_label_set_text_fmt(lbl, "%ld", (long)value);
 }
