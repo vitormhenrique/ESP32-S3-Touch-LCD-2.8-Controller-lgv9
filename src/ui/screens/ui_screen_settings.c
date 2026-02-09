@@ -23,6 +23,8 @@ static bool touch_cal_active = false;
 static uint8_t touch_cal_point = 0;
 static lv_obj_t *touch_cal_target = NULL;
 static lv_obj_t *touch_cal_label = NULL;
+static lv_obj_t *touch_cal_overlay = NULL;  // Clickable overlay for capturing touches
+static lv_obj_t *touch_cal_start_btn = NULL;
 static int16_t touch_cal_raw[4][2] = {{0}}; // 4 points, raw x/y
 
 // Gimbal calibration UI
@@ -61,6 +63,17 @@ static void robot_select_cb(lv_event_t *e) {
 static void touch_cal_start_cb(lv_event_t *e) {
     (void)e;
     ui_touch_cal_start();
+}
+
+// Touch calibration overlay click handler
+static void touch_cal_overlay_cb(lv_event_t *e) {
+    if (!touch_cal_active) return;
+    
+    lv_point_t point;
+    lv_indev_get_point(lv_indev_active(), &point);
+    
+    // Record the point (using screen coordinates as "raw" for simulator)
+    ui_touch_cal_record_point(point.x, point.y);
 }
 
 //=============================================================================
@@ -251,7 +264,7 @@ static void create_touch_cal_menu(lv_obj_t *parent) {
     lv_obj_set_size(menu_touch_cal, lv_pct(100), lv_pct(100));
     lv_obj_set_style_bg_opa(menu_touch_cal, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(menu_touch_cal, 0, 0);
-    lv_obj_set_style_pad_all(menu_touch_cal, 4, 0);
+    lv_obj_set_style_pad_all(menu_touch_cal, 0, 0);
     lv_obj_add_flag(menu_touch_cal, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(menu_touch_cal, LV_OBJ_FLAG_SCROLLABLE);
     
@@ -263,24 +276,34 @@ static void create_touch_cal_menu(lv_obj_t *parent) {
     lv_obj_set_style_text_align(touch_cal_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(touch_cal_label, LV_ALIGN_CENTER, 0, -15);
     
-    lv_obj_t *start_btn = lv_button_create(menu_touch_cal);
-    lv_obj_set_size(start_btn, 100, 28);
-    lv_obj_align(start_btn, LV_ALIGN_CENTER, 0, 25);
-    lv_obj_set_style_bg_color(start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
-    lv_obj_add_event_cb(start_btn, touch_cal_start_cb, LV_EVENT_CLICKED, NULL);
+    touch_cal_start_btn = lv_button_create(menu_touch_cal);
+    lv_obj_set_size(touch_cal_start_btn, 100, 28);
+    lv_obj_align(touch_cal_start_btn, LV_ALIGN_CENTER, 0, 25);
+    lv_obj_set_style_bg_color(touch_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_add_event_cb(touch_cal_start_btn, touch_cal_start_cb, LV_EVENT_CLICKED, NULL);
     
-    lv_obj_t *start_lbl = lv_label_create(start_btn);
+    lv_obj_t *start_lbl = lv_label_create(touch_cal_start_btn);
     lv_label_set_text(start_lbl, LV_SYMBOL_PLAY " Start");
     lv_obj_center(start_lbl);
     
     // Calibration target crosshair (hidden until calibration starts)
     touch_cal_target = lv_obj_create(menu_touch_cal);
-    lv_obj_set_size(touch_cal_target, 20, 20);
+    lv_obj_set_size(touch_cal_target, 30, 30);
     lv_obj_set_style_bg_opa(touch_cal_target, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_color(touch_cal_target, lv_color_hex(UI_COLOR_ACCENT_RED), 0);
     lv_obj_set_style_border_width(touch_cal_target, 2, 0);
     lv_obj_set_style_radius(touch_cal_target, LV_RADIUS_CIRCLE, 0);
     lv_obj_add_flag(touch_cal_target, LV_OBJ_FLAG_HIDDEN);
+    
+    // Transparent overlay to capture touch events during calibration
+    touch_cal_overlay = lv_obj_create(menu_touch_cal);
+    lv_obj_set_size(touch_cal_overlay, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_opa(touch_cal_overlay, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(touch_cal_overlay, 0, 0);
+    lv_obj_remove_flag(touch_cal_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(touch_cal_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(touch_cal_overlay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(touch_cal_overlay, touch_cal_overlay_cb, LV_EVENT_CLICKED, NULL);
 }
 
 static void create_gimbal_cal_menu(lv_obj_t *parent) {
@@ -423,9 +446,13 @@ void ui_touch_cal_start(void) {
     touch_cal_point = 0;
     memset(touch_cal_raw, 0, sizeof(touch_cal_raw));
     
-    // Show first target (top-left)
+    // Hide start button, show overlay
+    if (touch_cal_start_btn) lv_obj_add_flag(touch_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
+    if (touch_cal_overlay) lv_obj_remove_flag(touch_cal_overlay, LV_OBJ_FLAG_HIDDEN);
+    
+    // Show first target (top-left) - position matches positions[0] in record_point
     lv_obj_remove_flag(touch_cal_target, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_pos(touch_cal_target, 20, 30);
+    lv_obj_set_pos(touch_cal_target, 15, 35);
     lv_label_set_text(touch_cal_label, "Tap point 1 of 4\n(top-left)");
 }
 
@@ -436,12 +463,13 @@ void ui_touch_cal_record_point(int16_t raw_x, int16_t raw_y) {
     touch_cal_raw[touch_cal_point][1] = raw_y;
     touch_cal_point++;
     
-    // Position targets: TL, TR, BR, BL
+    // Target positions: TL, TR, BR, BL (corners of calibration area)
+    // Keep within visible content area (account for header at top)
     int16_t positions[4][2] = {
-        {20, 30},                               // Top-left
-        {UI_SCREEN_WIDTH - 40, 30},             // Top-right
-        {UI_SCREEN_WIDTH - 40, UI_CONTENT_HEIGHT - 20}, // Bottom-right
-        {20, UI_CONTENT_HEIGHT - 20}            // Bottom-left
+        {15, 35},                               // Top-left
+        {UI_SCREEN_WIDTH - 45, 35},             // Top-right  
+        {UI_SCREEN_WIDTH - 45, 130},            // Bottom-right (well above nav bar)
+        {15, 130}                               // Bottom-left (well above nav bar)
     };
     const char *labels[] = {
         "Tap point 2 of 4\n(top-right)",
@@ -453,11 +481,15 @@ void ui_touch_cal_record_point(int16_t raw_x, int16_t raw_y) {
     if (touch_cal_point < 4) {
         lv_obj_set_pos(touch_cal_target, positions[touch_cal_point][0], positions[touch_cal_point][1]);
         lv_label_set_text(touch_cal_label, labels[touch_cal_point - 1]);
+        lv_obj_align(touch_cal_label, LV_ALIGN_CENTER, 0, 0);
     } else {
         // Calibration complete
         touch_cal_active = false;
         lv_obj_add_flag(touch_cal_target, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(touch_cal_overlay, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(touch_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(touch_cal_label, "Calibration complete!\nData saved.");
+        lv_obj_align(touch_cal_label, LV_ALIGN_CENTER, 0, -15);
         
         // Calculate and save calibration
         TouchCalibration_t cal;
