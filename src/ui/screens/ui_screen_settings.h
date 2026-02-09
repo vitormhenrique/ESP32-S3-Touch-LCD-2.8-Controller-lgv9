@@ -35,7 +35,11 @@ bool ui_touch_cal_is_active(void);
 uint8_t ui_touch_cal_get_point(void);
 
 // Gimbal calibration functions
+void ui_gimbal_cal_start(void);
+void ui_gimbal_cal_record_step(void);
 void ui_gimbal_cal_update(int16_t values[4]);
+bool ui_gimbal_cal_is_active(void);
+uint8_t ui_gimbal_cal_get_axis(void);
 
 #ifdef __cplusplus
 }

@@ -31,6 +31,21 @@ static int16_t touch_cal_raw[4][2] = {{0}}; // 4 points, raw x/y
 static lv_obj_t *gimbal_bars[4] = {NULL};
 static lv_obj_t *gimbal_labels[4] = {NULL};
 
+// Gimbal calibration state
+static bool gimbal_cal_active = false;
+static uint8_t gimbal_cal_axis = 0;        // Current axis being calibrated (0-3)
+static uint8_t gimbal_cal_step = 0;        // 0=center, 1=min, 2=max
+static lv_obj_t *gimbal_cal_instruction = NULL;
+static lv_obj_t *gimbal_cal_axis_label = NULL;
+static lv_obj_t *gimbal_cal_value_label = NULL;
+static lv_obj_t *gimbal_cal_bar = NULL;
+static lv_obj_t *gimbal_cal_continue_btn = NULL;
+static lv_obj_t *gimbal_cal_start_btn = NULL;
+static lv_obj_t *gimbal_cal_status_panel = NULL;
+static int16_t gimbal_cal_current_value = 0;   // Current live reading
+static int16_t gimbal_cal_recorded[4][3] = {{0}}; // [axis][center/min/max]
+static const char *gimbal_axis_names[] = {"Left X", "Left Y", "Right X", "Right Y"};
+
 // Forward declarations
 static void create_main_menu(lv_obj_t *parent);
 static void create_radio_menu(lv_obj_t *parent);
@@ -75,6 +90,11 @@ static void touch_cal_overlay_cb(lv_event_t *e) {
     // Record the point (using screen coordinates as "raw" for simulator)
     ui_touch_cal_record_point(point.x, point.y);
 }
+
+// Gimbal calibration callbacks
+static void gimbal_cal_start_cb(lv_event_t *e);
+static void gimbal_cal_continue_cb(lv_event_t *e);
+static void gimbal_cal_update_ui(void);
 
 //=============================================================================
 // Menu Creation
@@ -313,35 +333,129 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
     lv_obj_set_style_border_width(menu_gimbal_cal, 0, 0);
     lv_obj_set_style_pad_all(menu_gimbal_cal, 4, 0);
     lv_obj_add_flag(menu_gimbal_cal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(menu_gimbal_cal, LV_OBJ_FLAG_SCROLLABLE);
     
     create_back_header(menu_gimbal_cal, "Gimbal Calibration");
     
-    const char *names[] = {"Left X", "Left Y", "Right X", "Right Y"};
+    // Instruction label (shows current step)
+    gimbal_cal_instruction = lv_label_create(menu_gimbal_cal);
+    lv_label_set_text(gimbal_cal_instruction, "Press Start to begin\ngimbal calibration.");
+    lv_obj_add_style(gimbal_cal_instruction, &style_text_secondary, 0);
+    lv_obj_set_style_text_align(gimbal_cal_instruction, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(gimbal_cal_instruction, LV_ALIGN_TOP_MID, 0, 30);
     
-    lv_obj_t *info = lv_label_create(menu_gimbal_cal);
-    lv_label_set_text(info, "Move sticks to full range:");
-    lv_obj_add_style(info, &style_text_secondary, 0);
-    lv_obj_align(info, LV_ALIGN_TOP_MID, 0, 28);
+    // Axis name label (shows which axis we're calibrating)
+    gimbal_cal_axis_label = lv_label_create(menu_gimbal_cal);
+    lv_label_set_text(gimbal_cal_axis_label, "");
+    lv_obj_add_style(gimbal_cal_axis_label, &style_text_primary, 0);
+    lv_obj_set_style_text_font(gimbal_cal_axis_label, &lv_font_montserrat_14, 0);
+    lv_obj_align(gimbal_cal_axis_label, LV_ALIGN_TOP_MID, 0, 58);
+    lv_obj_add_flag(gimbal_cal_axis_label, LV_OBJ_FLAG_HIDDEN);
     
+    // Live value bar
+    gimbal_cal_bar = lv_bar_create(menu_gimbal_cal);
+    lv_obj_set_size(gimbal_cal_bar, 200, 16);
+    lv_obj_align(gimbal_cal_bar, LV_ALIGN_CENTER, 0, -10);
+    lv_bar_set_range(gimbal_cal_bar, 0, 4095);  // Typical ADC range
+    lv_bar_set_value(gimbal_cal_bar, 2048, LV_ANIM_OFF);
+    lv_obj_add_flag(gimbal_cal_bar, LV_OBJ_FLAG_HIDDEN);
+    
+    // Live value label
+    gimbal_cal_value_label = lv_label_create(menu_gimbal_cal);
+    lv_label_set_text(gimbal_cal_value_label, "2048");
+    lv_obj_add_style(gimbal_cal_value_label, &style_text_primary, 0);
+    lv_obj_set_style_text_font(gimbal_cal_value_label, &lv_font_montserrat_12, 0);
+    lv_obj_align(gimbal_cal_value_label, LV_ALIGN_CENTER, 0, 12);
+    lv_obj_add_flag(gimbal_cal_value_label, LV_OBJ_FLAG_HIDDEN);
+    
+    // Start button
+    gimbal_cal_start_btn = lv_button_create(menu_gimbal_cal);
+    lv_obj_set_size(gimbal_cal_start_btn, 100, 28);
+    lv_obj_align(gimbal_cal_start_btn, LV_ALIGN_CENTER, 0, 25);
+    lv_obj_set_style_bg_color(gimbal_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_add_event_cb(gimbal_cal_start_btn, gimbal_cal_start_cb, LV_EVENT_CLICKED, NULL);
+    
+    lv_obj_t *start_lbl = lv_label_create(gimbal_cal_start_btn);
+    lv_label_set_text(start_lbl, LV_SYMBOL_PLAY " Start");
+    lv_obj_center(start_lbl);
+    
+    // Continue/Record button (hidden until calibration starts)
+    gimbal_cal_continue_btn = lv_button_create(menu_gimbal_cal);
+    lv_obj_set_size(gimbal_cal_continue_btn, 120, 32);
+    lv_obj_align(gimbal_cal_continue_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(gimbal_cal_continue_btn, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+    lv_obj_add_event_cb(gimbal_cal_continue_btn, gimbal_cal_continue_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_flag(gimbal_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+    
+    lv_obj_t *cont_lbl = lv_label_create(gimbal_cal_continue_btn);
+    lv_label_set_text(cont_lbl, LV_SYMBOL_OK " Record");
+    lv_obj_center(cont_lbl);
+    
+    // Status panel showing calibration progress for all axes (bottom area)
+    gimbal_cal_status_panel = lv_obj_create(menu_gimbal_cal);
+    lv_obj_set_size(gimbal_cal_status_panel, lv_pct(95), 55);
+    lv_obj_align(gimbal_cal_status_panel, LV_ALIGN_BOTTOM_MID, 0, -45);
+    lv_obj_set_style_bg_color(gimbal_cal_status_panel, lv_color_hex(UI_COLOR_BG_CARD), 0);
+    lv_obj_set_style_radius(gimbal_cal_status_panel, 6, 0);
+    lv_obj_set_style_pad_all(gimbal_cal_status_panel, 4, 0);
+    lv_obj_remove_flag(gimbal_cal_status_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(gimbal_cal_status_panel, LV_OBJ_FLAG_HIDDEN);
+    
+    // Create status indicators for each axis
     for (int i = 0; i < 4; i++) {
-        int y = 46 + i * 24;
+        int x = (i % 2) * 150 + 5;
+        int y = (i / 2) * 22 + 2;
         
-        lv_obj_t *name = lv_label_create(menu_gimbal_cal);
-        lv_label_set_text(name, names[i]);
-        lv_obj_add_style(name, &style_text_secondary, 0);
-        lv_obj_align(name, LV_ALIGN_TOP_LEFT, 4, y);
+        lv_obj_t *name = lv_label_create(gimbal_cal_status_panel);
+        lv_label_set_text(name, gimbal_axis_names[i]);
+        lv_obj_add_style(name, &style_text_small, 0);
+        lv_obj_set_pos(name, x, y);
         
-        gimbal_bars[i] = lv_bar_create(menu_gimbal_cal);
-        lv_obj_set_size(gimbal_bars[i], 140, 12);
-        lv_obj_align(gimbal_bars[i], LV_ALIGN_TOP_MID, 10, y);
-        lv_bar_set_range(gimbal_bars[i], 0, 32767);
-        lv_bar_set_value(gimbal_bars[i], 16383, LV_ANIM_OFF);
+        gimbal_bars[i] = lv_bar_create(gimbal_cal_status_panel);
+        lv_obj_set_size(gimbal_bars[i], 80, 8);
+        lv_obj_set_pos(gimbal_bars[i], x + 50, y + 2);
+        lv_bar_set_range(gimbal_bars[i], 0, 4095);
+        lv_bar_set_value(gimbal_bars[i], 2048, LV_ANIM_OFF);
         
-        gimbal_labels[i] = lv_label_create(menu_gimbal_cal);
-        lv_label_set_text(gimbal_labels[i], "16383");
+        gimbal_labels[i] = lv_label_create(gimbal_cal_status_panel);
+        lv_label_set_text(gimbal_labels[i], "-");
         lv_obj_add_style(gimbal_labels[i], &style_text_small, 0);
-        lv_obj_align(gimbal_labels[i], LV_ALIGN_TOP_RIGHT, -4, y);
+        lv_obj_set_pos(gimbal_labels[i], x + 135, y);
     }
+}
+
+// Gimbal calibration start callback
+static void gimbal_cal_start_cb(lv_event_t *e) {
+    (void)e;
+    ui_gimbal_cal_start();
+}
+
+// Gimbal calibration continue/record callback
+static void gimbal_cal_continue_cb(lv_event_t *e) {
+    (void)e;
+    ui_gimbal_cal_record_step();
+}
+
+// Update gimbal calibration UI based on current state
+static void gimbal_cal_update_ui(void) {
+    if (!gimbal_cal_active) return;
+    
+    const char *step_instructions[] = {
+        "Release stick to CENTER\nposition, then press Record",
+        "Move stick to MINIMUM\nposition, then press Record",
+        "Move stick to MAXIMUM\nposition, then press Record"
+    };
+    
+    // Update instruction
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Calibrating: %s\n%s", 
+             gimbal_axis_names[gimbal_cal_axis], 
+             step_instructions[gimbal_cal_step]);
+    lv_label_set_text(gimbal_cal_instruction, buf);
+    
+    // Update axis label
+    snprintf(buf, sizeof(buf), "%s - Step %d/3", gimbal_axis_names[gimbal_cal_axis], gimbal_cal_step + 1);
+    lv_label_set_text(gimbal_cal_axis_label, buf);
 }
 
 static void create_about_menu(lv_obj_t *parent) {
@@ -516,15 +630,128 @@ uint8_t ui_touch_cal_get_point(void) {
 // Gimbal Calibration
 //=============================================================================
 
+void ui_gimbal_cal_start(void) {
+    gimbal_cal_active = true;
+    gimbal_cal_axis = 0;
+    gimbal_cal_step = 0;
+    memset(gimbal_cal_recorded, 0, sizeof(gimbal_cal_recorded));
+    
+    // Show calibration UI elements
+    lv_obj_add_flag(gimbal_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(gimbal_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(gimbal_cal_axis_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(gimbal_cal_bar, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(gimbal_cal_value_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(gimbal_cal_status_panel, LV_OBJ_FLAG_HIDDEN);
+    
+    gimbal_cal_update_ui();
+    
+    printf("Gimbal calibration started\r\n");
+}
+
+void ui_gimbal_cal_record_step(void) {
+    if (!gimbal_cal_active) return;
+    
+    // Record current value for this step
+    gimbal_cal_recorded[gimbal_cal_axis][gimbal_cal_step] = gimbal_cal_current_value;
+    
+    printf("Gimbal cal: %s step %d = %d\r\n", 
+           gimbal_axis_names[gimbal_cal_axis], gimbal_cal_step, gimbal_cal_current_value);
+    
+    gimbal_cal_step++;
+    
+    if (gimbal_cal_step >= 3) {
+        // Finished this axis - calculate calibration
+        int16_t center = gimbal_cal_recorded[gimbal_cal_axis][0];
+        int16_t min_val = gimbal_cal_recorded[gimbal_cal_axis][1];
+        int16_t max_val = gimbal_cal_recorded[gimbal_cal_axis][2];
+        
+        // Detect inversion: if min > max, the axis is inverted
+        bool inverted = (min_val > max_val);
+        if (inverted) {
+            int16_t temp = min_val;
+            min_val = max_val;
+            max_val = temp;
+        }
+        
+        // Calculate deadzone (2% of range around center)
+        int16_t range = max_val - min_val;
+        int16_t deadzone = range / 50;  // 2% deadzone
+        
+        // Save calibration
+        GimbalCalibration_t cal;
+        cal.min_raw = min_val;
+        cal.max_raw = max_val;
+        cal.center_raw = center;
+        cal.deadzone = deadzone;
+        cal.inverted = inverted;
+        cal.calibrated = true;
+        Settings_SetGimbalCalibration(gimbal_cal_axis, &cal);
+        
+        printf("Gimbal %s calibrated: min=%d, center=%d, max=%d, inverted=%d\r\n",
+               gimbal_axis_names[gimbal_cal_axis], min_val, center, max_val, inverted);
+        
+        // Update status label for this axis
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%s%s", inverted ? "INV" : "OK", "");
+        lv_label_set_text(gimbal_labels[gimbal_cal_axis], buf);
+        lv_obj_set_style_text_color(gimbal_labels[gimbal_cal_axis], 
+            lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+        
+        // Move to next axis
+        gimbal_cal_axis++;
+        gimbal_cal_step = 0;
+        
+        if (gimbal_cal_axis >= 4) {
+            // All axes calibrated!
+            gimbal_cal_active = false;
+            lv_label_set_text(gimbal_cal_instruction, "Calibration complete!\nAll axes calibrated.");
+            lv_obj_add_flag(gimbal_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(gimbal_cal_axis_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(gimbal_cal_bar, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(gimbal_cal_value_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(gimbal_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
+            
+            // Change start button to "Restart"
+            lv_obj_t *lbl = lv_obj_get_child(gimbal_cal_start_btn, 0);
+            if (lbl) lv_label_set_text(lbl, LV_SYMBOL_REFRESH " Restart");
+            
+            printf("Gimbal calibration complete!\r\n");
+            return;
+        }
+    }
+    
+    gimbal_cal_update_ui();
+}
+
 void ui_gimbal_cal_update(int16_t values[4]) {
     char buf[16];
+    
+    // Update all status bars
     for (int i = 0; i < 4; i++) {
         if (gimbal_bars[i]) {
             lv_bar_set_value(gimbal_bars[i], values[i], LV_ANIM_OFF);
         }
-        if (gimbal_labels[i]) {
-            snprintf(buf, sizeof(buf), "%d", values[i]);
-            lv_label_set_text(gimbal_labels[i], buf);
+    }
+    
+    // If calibration is active, update the main display for current axis
+    if (gimbal_cal_active && gimbal_cal_axis < 4) {
+        gimbal_cal_current_value = values[gimbal_cal_axis];
+        
+        if (gimbal_cal_bar) {
+            lv_bar_set_value(gimbal_cal_bar, gimbal_cal_current_value, LV_ANIM_OFF);
+        }
+        if (gimbal_cal_value_label) {
+            snprintf(buf, sizeof(buf), "%d", gimbal_cal_current_value);
+            lv_label_set_text(gimbal_cal_value_label, buf);
         }
     }
+}
+
+bool ui_gimbal_cal_is_active(void) {
+    return gimbal_cal_active;
+}
+
+uint8_t ui_gimbal_cal_get_axis(void) {
+    return gimbal_cal_axis;
 }
