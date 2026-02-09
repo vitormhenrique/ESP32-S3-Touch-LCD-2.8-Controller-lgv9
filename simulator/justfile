@@ -1,0 +1,33 @@
+# LVGL Simulator for ESP32-S3-Touch-LCD-2.8
+# Usage: just <recipe>
+
+# Default recipe - build and run
+default: run
+
+# Build the simulator
+build:
+    @echo "Checking for SDL2..."
+    @brew list sdl2 &>/dev/null || (echo "Installing SDL2..." && brew install sdl2 pkg-config)
+    @mkdir -p build
+    @cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug
+    @cd build && make -j$(sysctl -n hw.ncpu)
+    @echo ""
+    @echo "Build complete!"
+
+# Run the simulator (builds first if needed)
+run: build
+    @echo "Starting LVGL Simulator (320x240)..."
+    @echo "Controls: Mouse = Touch, ESC = Quit"
+    ./build/simulator
+
+# Clean build artifacts
+clean:
+    rm -rf build
+
+# Rebuild from scratch
+rebuild: clean build
+
+# Quick rebuild (no cmake reconfigure)
+quick:
+    @cd build && make -j$(sysctl -n hw.ncpu)
+    ./build/simulator
