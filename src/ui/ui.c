@@ -1,5 +1,4 @@
 #include "ui.h"
-#include <stdio.h>
 
 lv_obj_t *ui_MainScreen = NULL;
 lv_obj_t *ui_ContentArea = NULL;

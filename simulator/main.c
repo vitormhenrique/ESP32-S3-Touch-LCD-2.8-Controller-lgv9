@@ -64,8 +64,14 @@ int main(int argc, char **argv)
     
     /* Initialize UI */
     printf("Initializing UI...\n");
+    fflush(stdout);
     ui_init();
     printf("UI initialized successfully!\n\n");
+    fflush(stdout);
+    
+    /* Force initial screen refresh */
+    lv_obj_invalidate(lv_screen_active());
+    lv_refr_now(lv_display_get_default());
     
     /* Main loop */
     printf("Running... Press ESC or close window to exit.\n");

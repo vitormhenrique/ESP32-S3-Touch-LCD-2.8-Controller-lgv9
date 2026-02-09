@@ -134,7 +134,8 @@ dkms.conf
 *.app
 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#C,C++
-
+# Simulator build artifacts
+simulator/build/
 
 CMakeLists.txt.user
 CMakeCache.txt
