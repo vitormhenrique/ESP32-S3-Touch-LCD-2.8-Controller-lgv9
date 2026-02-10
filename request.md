@@ -1,5 +1,5 @@
 
-3) on the telemetry screen, implement the same horizontal scroll, and the configuration for it will depend on what robot is loaded, but all robots should have the status screen, another panel with a rolling log, implement a screen for an hexapod using 18 DYNAMIXEL MX-28AR servos, one panel should display servo information, Another panel should show robot IMU data, virtual horizon, yaw, pitch, row, and any other information that is relevant for an hexapod. 
+3) 
 
 
 

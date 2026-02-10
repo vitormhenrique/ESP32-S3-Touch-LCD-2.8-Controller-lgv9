@@ -47,6 +47,10 @@ static int16_t gimbal_cal_current_value = 0;   // Current live reading
 static int16_t gimbal_cal_recorded[4][3] = {{0}}; // [axis][center/min/max]
 static const char *gimbal_axis_names[] = {"Left X", "Left Y", "Right X", "Right Y"};
 
+// Robot profile selection buttons and checkmarks
+static lv_obj_t *robot_profile_btns[ROBOT_PROFILE_COUNT] = {NULL};
+static lv_obj_t *robot_profile_checks[ROBOT_PROFILE_COUNT] = {NULL};
+
 // Forward declarations
 static void create_main_menu(lv_obj_t *parent);
 static void create_radio_menu(lv_obj_t *parent);
@@ -70,9 +74,36 @@ static void menu_btn_cb(lv_event_t *e) {
     ui_settings_show_menu((SettingsMenu_t)menu_id);
 }
 
+static void update_robot_profile_selection(RobotProfile_t selected) {
+    for (int i = 0; i < ROBOT_PROFILE_COUNT; i++) {
+        if (robot_profile_btns[i]) {
+            if (i == selected) {
+                // Highlight selected profile
+                lv_obj_set_style_bg_color(robot_profile_btns[i], lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+                lv_obj_set_style_border_color(robot_profile_btns[i], lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+                lv_obj_set_style_border_width(robot_profile_btns[i], 2, 0);
+                // Show checkmark
+                if (robot_profile_checks[i]) {
+                    lv_obj_remove_flag(robot_profile_checks[i], LV_OBJ_FLAG_HIDDEN);
+                }
+            } else {
+                // Normal style for non-selected
+                lv_obj_set_style_bg_color(robot_profile_btns[i], lv_color_hex(UI_COLOR_BG_CARD), 0);
+                lv_obj_set_style_border_color(robot_profile_btns[i], lv_color_hex(UI_COLOR_BORDER), 0);
+                lv_obj_set_style_border_width(robot_profile_btns[i], 1, 0);
+                // Hide checkmark
+                if (robot_profile_checks[i]) {
+                    lv_obj_add_flag(robot_profile_checks[i], LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+        }
+    }
+}
+
 static void robot_select_cb(lv_event_t *e) {
     intptr_t profile = (intptr_t)lv_event_get_user_data(e);
     Settings_SetRobotProfile((RobotProfile_t)profile);
+    update_robot_profile_selection((RobotProfile_t)profile);
     printf("Settings: Robot profile set to %s\r\n", Settings_GetRobotProfileName((RobotProfile_t)profile));
 }
 
@@ -257,27 +288,36 @@ static void create_robot_menu(lv_obj_t *parent) {
     create_back_header(menu_robot, "Robot Profile");
     
     const char *profiles[] = {"Generic", "Hexapod"};
-    const char *descs[] = {"Standard RC channels", "6-leg walking robot"};
+    
+    const Settings_t *s = Settings_Get();
     
     for (int i = 0; i < ROBOT_PROFILE_COUNT; i++) {
         lv_obj_t *btn = lv_button_create(menu_robot);
-        lv_obj_set_size(btn, lv_pct(95), 38);
+        lv_obj_set_size(btn, lv_pct(95), 36);
         lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 30 + i * 44);
-        lv_obj_add_style(btn, &style_card, 0);
+        lv_obj_set_style_radius(btn, 8, 0);
         lv_obj_add_event_cb(btn, robot_select_cb, LV_EVENT_CLICKED, (void*)(intptr_t)i);
         
+        // Store button reference
+        robot_profile_btns[i] = btn;
+        
+        // Profile name - centered vertically
         lv_obj_t *name = lv_label_create(btn);
         lv_label_set_text(name, profiles[i]);
         lv_obj_add_style(name, &style_text_primary, 0);
-        lv_obj_set_style_text_font(name, &lv_font_montserrat_10, 0);
-        lv_obj_align(name, LV_ALIGN_TOP_LEFT, 8, 4);
+        lv_obj_set_style_text_font(name, &lv_font_montserrat_12, 0);
+        lv_obj_align(name, LV_ALIGN_LEFT_MID, 8, 0);
         
-        lv_obj_t *desc = lv_label_create(btn);
-        lv_label_set_text(desc, descs[i]);
-        lv_obj_add_style(desc, &style_text_secondary, 0);
-        lv_obj_set_style_text_font(desc, &lv_font_montserrat_10, 0);
-        lv_obj_align(desc, LV_ALIGN_BOTTOM_LEFT, 8, -4);
+        // Add checkmark (created for all, visibility controlled by update function)
+        lv_obj_t *check = lv_label_create(btn);
+        lv_label_set_text(check, LV_SYMBOL_OK);
+        lv_obj_add_style(check, &style_text_primary, 0);
+        lv_obj_align(check, LV_ALIGN_RIGHT_MID, -8, 0);
+        robot_profile_checks[i] = check;
     }
+    
+    // Set initial highlight based on current setting
+    update_robot_profile_selection(s->robot_profile);
 }
 
 static void create_touch_cal_menu(lv_obj_t *parent) {
@@ -338,25 +378,22 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
     
     create_back_header(menu_gimbal_cal, "Gimbal Calibration");
     
-    // Instruction label - centered, shows current step
+    // Instruction label - centered, shows current step (includes axis name)
     gimbal_cal_instruction = lv_label_create(menu_gimbal_cal);
     lv_label_set_text(gimbal_cal_instruction, "Press Start to calibrate\nall gimbal axes.");
     lv_obj_add_style(gimbal_cal_instruction, &style_text_secondary, 0);
     lv_obj_set_style_text_align(gimbal_cal_instruction, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(gimbal_cal_instruction, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_align(gimbal_cal_instruction, LV_ALIGN_TOP_MID, 0, 28);
     
-    // Axis name label - large, shows which axis we're calibrating
+    // Axis name label - not used separately anymore (integrated in instruction)
     gimbal_cal_axis_label = lv_label_create(menu_gimbal_cal);
     lv_label_set_text(gimbal_cal_axis_label, "");
-    lv_obj_add_style(gimbal_cal_axis_label, &style_text_primary, 0);
-    lv_obj_set_style_text_font(gimbal_cal_axis_label, &lv_font_montserrat_14, 0);
-    lv_obj_align(gimbal_cal_axis_label, LV_ALIGN_CENTER, 0, -20);
-    lv_obj_add_flag(gimbal_cal_axis_label, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(gimbal_cal_axis_label, LV_OBJ_FLAG_HIDDEN);  // Always hidden
     
     // Live value bar - centered, prominent
     gimbal_cal_bar = lv_bar_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_bar, 200, 16);
-    lv_obj_align(gimbal_cal_bar, LV_ALIGN_CENTER, 0, 5);
+    lv_obj_set_size(gimbal_cal_bar, 200, 14);
+    lv_obj_align(gimbal_cal_bar, LV_ALIGN_CENTER, 0, -5);
     lv_bar_set_range(gimbal_cal_bar, 0, 4095);
     lv_bar_set_value(gimbal_cal_bar, 2048, LV_ANIM_OFF);
     lv_obj_add_flag(gimbal_cal_bar, LV_OBJ_FLAG_HIDDEN);
@@ -365,7 +402,7 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
     gimbal_cal_value_label = lv_label_create(menu_gimbal_cal);
     lv_label_set_text(gimbal_cal_value_label, "2048");
     lv_obj_add_style(gimbal_cal_value_label, &style_text_secondary, 0);
-    lv_obj_align(gimbal_cal_value_label, LV_ALIGN_CENTER, 0, 25);
+    lv_obj_align(gimbal_cal_value_label, LV_ALIGN_CENTER, 0, 12);
     lv_obj_add_flag(gimbal_cal_value_label, LV_OBJ_FLAG_HIDDEN);
     
     // Compact status row at bottom - shows all 4 values in one line
@@ -398,7 +435,7 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
     
     // Start button - centered
     gimbal_cal_start_btn = lv_button_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_start_btn, 110, 32);
+    lv_obj_set_size(gimbal_cal_start_btn, 100, 28);
     lv_obj_align(gimbal_cal_start_btn, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_bg_color(gimbal_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
     lv_obj_add_event_cb(gimbal_cal_start_btn, gimbal_cal_start_cb, LV_EVENT_CLICKED, NULL);
@@ -407,10 +444,10 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
     lv_label_set_text(start_lbl, LV_SYMBOL_PLAY " Start");
     lv_obj_center(start_lbl);
     
-    // Record button - centered below bar (hidden until calibration)
+    // Record button - below value label (hidden until calibration)
     gimbal_cal_continue_btn = lv_button_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_continue_btn, 110, 32);
-    lv_obj_align(gimbal_cal_continue_btn, LV_ALIGN_CENTER, 0, 55);
+    lv_obj_set_size(gimbal_cal_continue_btn, 100, 28);
+    lv_obj_align(gimbal_cal_continue_btn, LV_ALIGN_CENTER, 0, 38);
     lv_obj_set_style_bg_color(gimbal_cal_continue_btn, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
     lv_obj_add_event_cb(gimbal_cal_continue_btn, gimbal_cal_continue_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(gimbal_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
@@ -440,17 +477,14 @@ static void gimbal_cal_update_ui(void) {
     static const char* axis_display[] = {"Left X", "Left Y", "Right X", "Right Y"};
     const char *step_actions[] = {"release stick", "push to MIN", "push to MAX"};
     
-    // Update instruction text - show step clearly
-    char buf[64];
+    // Update instruction text - show axis and step info together
+    char buf[80];
     snprintf(buf, sizeof(buf), "%s (%d/4) - Step %d/3:\n%s", 
              axis_display[gimbal_cal_axis],
              gimbal_cal_axis + 1,
              gimbal_cal_step + 1,
              step_actions[gimbal_cal_step]);
     lv_label_set_text(gimbal_cal_instruction, buf);
-    
-    // Update axis label - just show axis name prominently  
-    lv_label_set_text(gimbal_cal_axis_label, axis_display[gimbal_cal_axis]);
 }
 
 static void create_about_menu(lv_obj_t *parent) {
@@ -498,6 +532,7 @@ static void hide_all_menus(void) {
 //=============================================================================
 
 void ui_create_settings_screen(lv_obj_t *parent) {
+    printf("Settings: Creating screen container...\r\n");
     ui_SettingsScreen = lv_obj_create(parent);
     lv_obj_set_size(ui_SettingsScreen, lv_pct(100), lv_pct(100));
     lv_obj_set_style_bg_opa(ui_SettingsScreen, LV_OPA_TRANSP, 0);
@@ -506,12 +541,19 @@ void ui_create_settings_screen(lv_obj_t *parent) {
     lv_obj_remove_flag(ui_SettingsScreen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(ui_SettingsScreen, LV_OBJ_FLAG_HIDDEN);
     
+    printf("Settings: Creating main menu...\r\n");
     create_main_menu(ui_SettingsScreen);
+    printf("Settings: Creating radio menu...\r\n");
     create_radio_menu(ui_SettingsScreen);
+    printf("Settings: Creating robot menu...\r\n");
     create_robot_menu(ui_SettingsScreen);
+    printf("Settings: Creating touch cal menu...\r\n");
     create_touch_cal_menu(ui_SettingsScreen);
+    printf("Settings: Creating gimbal cal menu...\r\n");
     create_gimbal_cal_menu(ui_SettingsScreen);
+    printf("Settings: Creating about menu...\r\n");
     create_about_menu(ui_SettingsScreen);
+    printf("Settings: All menus created\r\n");
     
     current_menu = SETTINGS_MENU_MAIN;
 }

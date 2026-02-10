@@ -14,6 +14,7 @@ static Preferences prefs;
 // NVS namespace and keys
 static const char* NVS_NAMESPACE = "rc_settings";
 static const char* KEY_GIMBAL_CAL = "gimbal_cal";
+static const char* KEY_ROBOT_PROFILE = "robot_prof";
 
 //=============================================================================
 // NVS Persistence Functions
@@ -23,6 +24,12 @@ static bool load_from_nvs(void) {
     if (!prefs.begin(NVS_NAMESPACE, true)) {  // true = read-only
         printf("Settings: NVS namespace not found, using defaults\r\n");
         return false;
+    }
+    
+    // Load robot profile
+    if (prefs.isKey(KEY_ROBOT_PROFILE)) {
+        settings.robot_profile = (RobotProfile_t)prefs.getUChar(KEY_ROBOT_PROFILE, ROBOT_PROFILE_GENERIC);
+        printf("Settings: Loaded robot profile: %s\r\n", Settings_GetRobotProfileName(settings.robot_profile));
     }
     
     // Load gimbal calibrations
@@ -63,6 +70,25 @@ static bool save_gimbal_cal_to_nvs(void) {
         return true;
     } else {
         printf("Settings: Failed to save gimbal calibration\r\n");
+        return false;
+    }
+}
+
+static bool save_robot_profile_to_nvs(void) {
+    if (!prefs.begin(NVS_NAMESPACE, false)) {
+        printf("Settings: Failed to open NVS for writing\r\n");
+        return false;
+    }
+    
+    size_t written = prefs.putUChar(KEY_ROBOT_PROFILE, (uint8_t)settings.robot_profile);
+    prefs.end();
+    
+    if (written == 1) {
+        printf("Settings: Saved robot profile to NVS: %s\r\n", 
+               Settings_GetRobotProfileName(settings.robot_profile));
+        return true;
+    } else {
+        printf("Settings: Failed to save robot profile\r\n");
         return false;
     }
 }
@@ -138,6 +164,8 @@ void Settings_ResetToDefaults(void) {
 
 void Settings_SetRobotProfile(RobotProfile_t profile) {
     settings.robot_profile = profile;
+    // Auto-save to NVS when profile is changed
+    save_robot_profile_to_nvs();
 }
 
 void Settings_SetTouchCalibration(const TouchCalibration_t* cal) {
