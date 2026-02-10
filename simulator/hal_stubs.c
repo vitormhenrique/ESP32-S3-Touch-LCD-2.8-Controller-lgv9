@@ -59,3 +59,17 @@ void delay(unsigned long ms) {
 
 /* Printf redirect for debugging (already supported on desktop) */
 
+/* UI Integration stubs - these are in ui_custom_integration.cpp on ESP32 */
+void ui_apply_gimbal_calibration(uint8_t axis, int16_t min_val, int16_t center_val, 
+                                  int16_t max_val, int16_t deadzone, bool inverted)
+{
+    printf("Simulator: Apply gimbal calibration axis=%d min=%d center=%d max=%d dz=%d inv=%d\n",
+           axis, min_val, center_val, max_val, deadzone, inverted);
+    /* In simulator, we don't have a real driver to apply calibration to */
+}
+
+void ui_load_gimbal_calibrations(void)
+{
+    printf("Simulator: Load gimbal calibrations (stub)\n");
+    /* In simulator, calibrations don't persist anyway */
+}

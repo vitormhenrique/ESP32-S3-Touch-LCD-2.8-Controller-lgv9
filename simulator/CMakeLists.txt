@@ -8,8 +8,9 @@ set(CMAKE_CXX_STANDARD 11)
 set(DISP_HOR_RES 320)
 set(DISP_VER_RES 240)
 
+# Use LV_CONF_PATH to specify the exact config file path
 add_compile_definitions(
-    LV_CONF_INCLUDE_SIMPLE
+    LV_CONF_PATH="${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h"
     SIMULATOR=1
     DISP_HOR_RES=${DISP_HOR_RES}
     DISP_VER_RES=${DISP_VER_RES}
@@ -51,10 +52,11 @@ add_executable(simulator
     ${SIM_SOURCES}
 )
 
+# IMPORTANT: Simulator directory must come BEFORE LVGL_DIR so our lv_conf.h is found first!
 target_include_directories(simulator PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${SDL2_INCLUDE_DIRS}
     ${LVGL_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
 )
@@ -67,7 +69,7 @@ target_link_libraries(simulator PRIVATE
 )
 
 # Add compiler flags from pkg-config
-target_compile_options(simulator PRIVATE ${SDL2_CFLAGS_OTHER})
+target_compile_options(simulator PRIVATE ${SDL2_CFLAGS_OTHER} -g)
 
 # Copy lv_conf.h to build directory if needed
 configure_file(

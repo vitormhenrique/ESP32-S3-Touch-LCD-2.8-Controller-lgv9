@@ -14,6 +14,8 @@ extern "C" {
 #endif
 
 #include "ui_custom.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 /**
  * @brief Update all UI elements from InputManager data
@@ -31,6 +33,23 @@ extern "C" {
  * @endcode
  */
 void ui_update_from_inputs(void);
+
+/**
+ * @brief Apply gimbal calibration to the input driver
+ * 
+ * Called from UI when calibration is recorded.
+ * Applies the calibration data to the ADS1X15 driver.
+ */
+void ui_apply_gimbal_calibration(uint8_t axis, int16_t min_val, int16_t center_val, 
+                                  int16_t max_val, int16_t deadzone, bool inverted);
+
+/**
+ * @brief Load gimbal calibrations from Settings
+ * 
+ * Call this after InputManager is initialized to load any
+ * previously saved calibration data.
+ */
+void ui_load_gimbal_calibrations(void);
 
 /**
  * @brief Initialize custom UI and switch to it

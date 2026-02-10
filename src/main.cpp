@@ -19,6 +19,9 @@ void DriverTask(void *parameter) {
   Wireless_Test2();
   Input_Init();  // Initialize InputManager
   
+  // Load saved gimbal calibrations from Settings
+  ui_load_gimbal_calibrations();
+  
   while(1){
     Perf_StartSection(PERF_COUNTER_DRIVER_LOOP);
     

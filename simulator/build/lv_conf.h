@@ -121,8 +121,8 @@
 #define LV_USE_ASSERT_MEM_INTEGRITY 0
 #define LV_USE_ASSERT_OBJ           0
 
-#define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
-#define LV_ASSERT_HANDLER { *(volatile int *)0 = 0; }
+#define LV_ASSERT_HANDLER_INCLUDE <stdlib.h>
+#define LV_ASSERT_HANDLER { abort(); }
 
 /* Debug */
 #define LV_USE_REFR_DEBUG 0

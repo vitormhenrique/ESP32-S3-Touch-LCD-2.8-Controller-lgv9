@@ -5,6 +5,8 @@
 
 #include "ui_custom_integration.h"
 #include "InputManager.h"
+#include "Settings.h"
+#include "ui/screens/ui_screen_settings.h"
 
 // Encoder state tracking (you'll need to implement encoder reading)
 static int32_t encoder_values[2] = {0, 0};
@@ -85,6 +87,17 @@ void ui_update_from_inputs(void)
     //=========================================================================
     ui_set_encoder(0, encoder_values[0]);
     ui_set_encoder(1, encoder_values[1]);
+    
+    //=========================================================================
+    // Update Gimbal Calibration Display
+    // Always update the raw values display when on settings screen
+    //=========================================================================
+    int16_t gimbal_raw[4];
+    gimbal_raw[0] = RCInput.getGimbalRaw(GIMBAL_LEFT_X);
+    gimbal_raw[1] = RCInput.getGimbalRaw(GIMBAL_LEFT_Y);
+    gimbal_raw[2] = RCInput.getGimbalRaw(GIMBAL_RIGHT_X);
+    gimbal_raw[3] = RCInput.getGimbalRaw(GIMBAL_RIGHT_Y);
+    ui_gimbal_cal_update(gimbal_raw);
 }
 
 // Call these from your encoder ISR or polling routine
@@ -101,5 +114,34 @@ void ui_encoder_set(uint8_t index, int32_t value)
     if (index < 2) {
         encoder_values[index] = value;
         ui_set_encoder(index, encoder_values[index]);
+    }
+}
+
+void ui_apply_gimbal_calibration(uint8_t axis, int16_t min_val, int16_t center_val, int16_t max_val, int16_t deadzone, bool inverted)
+{
+    if (!RCInput.isReady()) {
+        printf("Warning: Cannot apply calibration - InputManager not ready\n");
+        return;
+    }
+    RCInput.calibrateGimbal(axis, min_val, center_val, max_val, deadzone, inverted);
+}
+
+void ui_load_gimbal_calibrations(void)
+{
+    if (!RCInput.isReady()) {
+        printf("Warning: Cannot load calibration - InputManager not ready\n");
+        return;
+    }
+    
+    const Settings_t* settings = Settings_Get();
+    if (!settings) return;
+    
+    for (uint8_t i = 0; i < 4; i++) {
+        const GimbalCalibration_t* cal = &settings->gimbal_cal[i];
+        if (cal->calibrated) {
+            RCInput.calibrateGimbal(i, cal->min_raw, cal->center_raw, cal->max_raw, 
+                                    cal->deadzone, cal->inverted);
+            printf("Loaded calibration for gimbal %d\n", i);
+        }
     }
 }

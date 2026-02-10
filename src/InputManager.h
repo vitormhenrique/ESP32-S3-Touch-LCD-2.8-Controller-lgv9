@@ -158,8 +158,8 @@ public:
     /**
      * Calibrate a gimbal axis
      */
-    void calibrateGimbal(uint8_t axis, int16_t min_val, int16_t center_val, int16_t max_val) {
-        AnalogInput.calibrateGimbalAxis(axis, min_val, center_val, max_val);
+    void calibrateGimbal(uint8_t axis, int16_t min_val, int16_t center_val, int16_t max_val, int16_t deadzone = 200, bool inverted = false) {
+        AnalogInput.calibrateGimbalAxis(axis, min_val, center_val, max_val, deadzone, inverted);
     }
     
     /**
