@@ -3,10 +3,10 @@
 #include <stdbool.h>
 
 /******************************************************************************
- * Settings Module - In-Memory Configuration (No Persistence)
+ * Settings Module - Configuration with NVS Persistence
  * 
  * Stores runtime configuration for radio, robot, calibration settings.
- * Data is lost on reboot - persistence will be implemented later.
+ * Gimbal calibration is automatically saved to NVS flash and restored on boot.
  ******************************************************************************/
 
 #ifdef __cplusplus

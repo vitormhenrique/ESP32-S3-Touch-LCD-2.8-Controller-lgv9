@@ -1,13 +1,71 @@
 #include "Settings.h"
 #include <string.h>
 #include <stdio.h>
+#include <Preferences.h>
 
 /******************************************************************************
- * Settings Module Implementation - Memory Only (No Persistence)
+ * Settings Module Implementation - With NVS Persistence
  ******************************************************************************/
 
 static Settings_t settings;
 static bool initialized = false;
+static Preferences prefs;
+
+// NVS namespace and keys
+static const char* NVS_NAMESPACE = "rc_settings";
+static const char* KEY_GIMBAL_CAL = "gimbal_cal";
+
+//=============================================================================
+// NVS Persistence Functions
+//=============================================================================
+
+static bool load_from_nvs(void) {
+    if (!prefs.begin(NVS_NAMESPACE, true)) {  // true = read-only
+        printf("Settings: NVS namespace not found, using defaults\r\n");
+        return false;
+    }
+    
+    // Load gimbal calibrations
+    size_t len = prefs.getBytesLength(KEY_GIMBAL_CAL);
+    if (len == sizeof(settings.gimbal_cal)) {
+        prefs.getBytes(KEY_GIMBAL_CAL, settings.gimbal_cal, len);
+        printf("Settings: Loaded gimbal calibration from NVS\r\n");
+        
+        // Print loaded calibration info
+        for (int i = 0; i < 4; i++) {
+            if (settings.gimbal_cal[i].calibrated) {
+                printf("  Axis %d: min=%d, center=%d, max=%d, inv=%d\r\n",
+                       i, settings.gimbal_cal[i].min_raw, 
+                       settings.gimbal_cal[i].center_raw,
+                       settings.gimbal_cal[i].max_raw,
+                       settings.gimbal_cal[i].inverted);
+            }
+        }
+    } else {
+        printf("Settings: No valid gimbal calibration in NVS\r\n");
+    }
+    
+    prefs.end();
+    return true;
+}
+
+static bool save_gimbal_cal_to_nvs(void) {
+    if (!prefs.begin(NVS_NAMESPACE, false)) {  // false = read-write
+        printf("Settings: Failed to open NVS for writing\r\n");
+        return false;
+    }
+    
+    size_t written = prefs.putBytes(KEY_GIMBAL_CAL, settings.gimbal_cal, sizeof(settings.gimbal_cal));
+    prefs.end();
+    
+    if (written == sizeof(settings.gimbal_cal)) {
+        printf("Settings: Saved gimbal calibration to NVS (%d bytes)\r\n", written);
+        return true;
+    } else {
+        printf("Settings: Failed to save gimbal calibration\r\n");
+        return false;
+    }
+}
 
 //=============================================================================
 // Default Values
@@ -53,10 +111,14 @@ static void apply_defaults(void) {
 void Settings_Init(void) {
     if (initialized) return;
     
-    printf("Settings: Initializing (memory-only, no persistence)\r\n");
+    printf("Settings: Initializing with NVS persistence\r\n");
     apply_defaults();
+    
+    // Try to load saved settings from NVS
+    load_from_nvs();
+    
     initialized = true;
-    printf("Settings: Ready with defaults\r\n");
+    printf("Settings: Ready\r\n");
 }
 
 const Settings_t* Settings_Get(void) {
@@ -87,6 +149,8 @@ void Settings_SetTouchCalibration(const TouchCalibration_t* cal) {
 void Settings_SetGimbalCalibration(uint8_t axis, const GimbalCalibration_t* cal) {
     if (axis < 4 && cal) {
         memcpy(&settings.gimbal_cal[axis], cal, sizeof(GimbalCalibration_t));
+        // Auto-save to NVS when calibration is updated
+        save_gimbal_cal_to_nvs();
     }
 }
 

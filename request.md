@@ -2,7 +2,7 @@
 3) on the telemetry screen, implement the same horizontal scroll, and the configuration for it will depend on what robot is loaded, but all robots should have the status screen, another panel with a rolling log, implement a screen for an hexapod using 18 DYNAMIXEL MX-28AR servos, one panel should display servo information, Another panel should show robot IMU data, virtual horizon, yaw, pitch, row, and any other information that is relevant for an hexapod. 
 
 
-9) Implement a debug flag at compilation time, if that is true, add some metrics on the code that we measure loop performance on how often the screen is updating (fps) how often the main loop is running and how fast is the input loop running, every 5 seconds print the average values and any other good performance metric.
+
 
 11) make sure that the code can compile, and is working
 
