@@ -30,7 +30,7 @@ void ui_create_telemetry_screen(lv_obj_t *parent)
     lv_obj_t *title1 = lv_label_create(ui_TelemetryPanel1);
     lv_label_set_text(title1, "Robot Data");
     lv_obj_add_style(title1, &style_text_primary, 0);
-    lv_obj_set_style_text_font(title1, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(title1, &lv_font_montserrat_10, 0);
     lv_obj_align(title1, LV_ALIGN_TOP_MID, 0, 0);
     
     const char *labels1[] = {"Temp 1:", "Temp 2:", "Bat V:", "Current:"};
@@ -39,13 +39,13 @@ void ui_create_telemetry_screen(lv_obj_t *parent)
         ui_TelemetryLabels[i] = lv_label_create(ui_TelemetryPanel1);
         lv_label_set_text(ui_TelemetryLabels[i], labels1[i]);
         lv_obj_add_style(ui_TelemetryLabels[i], &style_text_secondary, 0);
-        lv_obj_set_style_text_font(ui_TelemetryLabels[i], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(ui_TelemetryLabels[i], &lv_font_montserrat_10, 0);
         lv_obj_align(ui_TelemetryLabels[i], LV_ALIGN_TOP_LEFT, 0, 18 + i * 18);
         
         ui_TelemetryValues[i] = lv_label_create(ui_TelemetryPanel1);
         lv_label_set_text(ui_TelemetryValues[i], values1[i]);
         lv_obj_add_style(ui_TelemetryValues[i], &style_text_primary, 0);
-        lv_obj_set_style_text_font(ui_TelemetryValues[i], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(ui_TelemetryValues[i], &lv_font_montserrat_10, 0);
         lv_obj_align(ui_TelemetryValues[i], LV_ALIGN_TOP_RIGHT, 0, 18 + i * 18);
     }
     
@@ -61,7 +61,7 @@ void ui_create_telemetry_screen(lv_obj_t *parent)
     lv_obj_t *title2 = lv_label_create(ui_TelemetryPanel2);
     lv_label_set_text(title2, "Status");
     lv_obj_add_style(title2, &style_text_primary, 0);
-    lv_obj_set_style_text_font(title2, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(title2, &lv_font_montserrat_10, 0);
     lv_obj_align(title2, LV_ALIGN_TOP_MID, 0, 0);
     
     const char *labels2[] = {"RSSI:", "Latency:", "Errors:", "Uptime:"};
@@ -70,13 +70,13 @@ void ui_create_telemetry_screen(lv_obj_t *parent)
         ui_TelemetryLabels[i + 4] = lv_label_create(ui_TelemetryPanel2);
         lv_label_set_text(ui_TelemetryLabels[i + 4], labels2[i]);
         lv_obj_add_style(ui_TelemetryLabels[i + 4], &style_text_secondary, 0);
-        lv_obj_set_style_text_font(ui_TelemetryLabels[i + 4], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(ui_TelemetryLabels[i + 4], &lv_font_montserrat_10, 0);
         lv_obj_align(ui_TelemetryLabels[i + 4], LV_ALIGN_TOP_LEFT, 0, 18 + i * 18);
         
         ui_TelemetryValues[i + 4] = lv_label_create(ui_TelemetryPanel2);
         lv_label_set_text(ui_TelemetryValues[i + 4], values2[i]);
         lv_obj_add_style(ui_TelemetryValues[i + 4], &style_text_primary, 0);
-        lv_obj_set_style_text_font(ui_TelemetryValues[i + 4], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(ui_TelemetryValues[i + 4], &lv_font_montserrat_10, 0);
         lv_obj_align(ui_TelemetryValues[i + 4], LV_ALIGN_TOP_RIGHT, 0, 18 + i * 18);
     }
 }

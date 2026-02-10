@@ -139,7 +139,7 @@ void ui_styles_init(void)
     // Text small
     lv_style_init(&style_text_small);
     lv_style_set_text_color(&style_text_small, lv_color_hex(UI_COLOR_TEXT_TERTIARY));
-    lv_style_set_text_font(&style_text_small, &lv_font_montserrat_12);
+    lv_style_set_text_font(&style_text_small, &lv_font_montserrat_10);
     
     // Nav active
     lv_style_init(&style_nav_active);

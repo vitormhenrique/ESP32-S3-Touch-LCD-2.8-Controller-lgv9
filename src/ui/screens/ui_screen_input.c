@@ -223,7 +223,7 @@ static void create_page2_content(lv_obj_t *page)
         ui_EncValues[i] = lv_label_create(enc_cont);
         lv_label_set_text(ui_EncValues[i], "0");
         lv_obj_add_style(ui_EncValues[i], &style_text_primary, 0);
-        lv_obj_set_style_text_font(ui_EncValues[i], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(ui_EncValues[i], &lv_font_montserrat_10, 0);
         lv_obj_align(ui_EncValues[i], LV_ALIGN_BOTTOM_MID, 0, -2);
         
         ui_EncPanels[i] = enc_cont;

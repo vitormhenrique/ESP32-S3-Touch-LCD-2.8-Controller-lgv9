@@ -123,7 +123,7 @@ static lv_obj_t* create_back_header(lv_obj_t *parent, const char *title) {
     lv_obj_t *title_lbl = lv_label_create(header);
     lv_label_set_text(title_lbl, title);
     lv_obj_add_style(title_lbl, &style_text_primary, 0);
-    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_10, 0);
     lv_obj_align(title_lbl, LV_ALIGN_CENTER, 10, 0);
     
     return header;
@@ -173,7 +173,7 @@ static void create_main_menu(lv_obj_t *parent) {
         lv_obj_t *lbl = lv_label_create(btn);
         lv_label_set_text(lbl, items[i].label);
         lv_obj_add_style(lbl, &style_text_primary, 0);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_10, 0);
         lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 24, 0);
         
         // Arrow on the right
@@ -268,7 +268,7 @@ static void create_robot_menu(lv_obj_t *parent) {
         lv_obj_t *name = lv_label_create(btn);
         lv_label_set_text(name, profiles[i]);
         lv_obj_add_style(name, &style_text_primary, 0);
-        lv_obj_set_style_text_font(name, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(name, &lv_font_montserrat_10, 0);
         lv_obj_align(name, LV_ALIGN_TOP_LEFT, 8, 4);
         
         lv_obj_t *desc = lv_label_create(btn);
@@ -364,7 +364,7 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
     gimbal_cal_value_label = lv_label_create(menu_gimbal_cal);
     lv_label_set_text(gimbal_cal_value_label, "2048");
     lv_obj_add_style(gimbal_cal_value_label, &style_text_primary, 0);
-    lv_obj_set_style_text_font(gimbal_cal_value_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(gimbal_cal_value_label, &lv_font_montserrat_10, 0);
     lv_obj_align(gimbal_cal_value_label, LV_ALIGN_CENTER, 0, 12);
     lv_obj_add_flag(gimbal_cal_value_label, LV_OBJ_FLAG_HIDDEN);
     

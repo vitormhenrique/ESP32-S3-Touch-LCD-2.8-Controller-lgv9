@@ -48,7 +48,7 @@ void ui_create_header(lv_obj_t *parent)
     ui_TitleLabel = lv_label_create(ui_HeaderPanel);
     lv_label_set_text(ui_TitleLabel, "RC Control");
     lv_obj_add_style(ui_TitleLabel, &style_text_primary, 0);
-    lv_obj_set_style_text_font(ui_TitleLabel, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(ui_TitleLabel, &lv_font_montserrat_10, 0);
     lv_obj_align(ui_TitleLabel, LV_ALIGN_LEFT_MID, 2, 0);
     
     ui_StatusIcon = lv_label_create(ui_HeaderPanel);
@@ -64,7 +64,7 @@ void ui_create_header(lv_obj_t *parent)
     ui_BatteryLabel = lv_label_create(ui_HeaderPanel);
     lv_label_set_text(ui_BatteryLabel, "100%");
     lv_obj_add_style(ui_BatteryLabel, &style_text_secondary, 0);
-    lv_obj_set_style_text_font(ui_BatteryLabel, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(ui_BatteryLabel, &lv_font_montserrat_10, 0);
     lv_obj_align(ui_BatteryLabel, LV_ALIGN_RIGHT_MID, -2, 0);
 }
 
