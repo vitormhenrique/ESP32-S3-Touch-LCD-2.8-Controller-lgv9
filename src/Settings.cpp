@@ -143,9 +143,8 @@ void Settings_Init(void) {
     // Try to load saved settings from NVS
     load_from_nvs();
 
-        
     // DEBUG: Force Generic profile to debug crash
-    settings.robot_profile = ROBOT_PROFILE_GENERIC;
+    // settings.robot_profile = ROBOT_PROFILE_GENERIC;
     printf("Settings: DEBUG - Forcing Generic profile\r\n");
     
     initialized = true;

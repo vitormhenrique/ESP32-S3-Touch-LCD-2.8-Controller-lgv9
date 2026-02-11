@@ -309,87 +309,36 @@ static void create_servo_panel(int page, int start_servo) {
 //=============================================================================
 
 static void create_imu9_panel(void) {
+    printf("IMU9: Starting panel creation...\r\n");
+    
     lv_obj_t *panel = create_panel_base("9-DOF IMU");
+    if (!panel) {
+        printf("IMU9: ERROR - panel creation failed!\r\n");
+        return;
+    }
     panels[num_panels++] = panel;
-    imu9_panel = panel;  // Keep reference for show/hide
+    imu9_panel = panel;
+    printf("IMU9: Base panel created, num_panels=%d\r\n", num_panels);
     
-    int row_h = 16;
-    int col1_x = 5;
-    int col2_x = 115;
-    int val_offset = 35;
-    int y = 18;
+    // Simple test: just 3 static labels
+    lv_obj_t *lbl1 = lv_label_create(panel);
+    lv_label_set_text(lbl1, "Accel: 0.00, 0.00, 0.00");
+    lv_obj_set_pos(lbl1, 5, 20);
     
-    // === LEFT COLUMN: Accelerometer ===
-    lv_obj_t *accel_title = lv_label_create(panel);
-    lv_label_set_text(accel_title, "Accel (g)");
-    lv_obj_set_style_text_color(accel_title, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
-    lv_obj_set_pos(accel_title, col1_x, y);
-    y += row_h;
+    lv_obj_t *lbl2 = lv_label_create(panel);
+    lv_label_set_text(lbl2, "Gyro:  0.00, 0.00, 0.00");
+    lv_obj_set_pos(lbl2, 5, 40);
     
-    // Accel X/Y/Z
-    const char *labels[] = {"X:", "Y:", "Z:"};
-    lv_obj_t **accel_vals[] = {&imu9_accel_x, &imu9_accel_y, &imu9_accel_z};
+    lv_obj_t *lbl3 = lv_label_create(panel);
+    lv_label_set_text(lbl3, "Mag:   0.00, 0.00, 0.00");
+    lv_obj_set_pos(lbl3, 5, 60);
     
-    for (int i = 0; i < 3; i++) {
-        lv_obj_t *lbl = lv_label_create(panel);
-        lv_label_set_text(lbl, labels[i]);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_set_pos(lbl, col1_x, y);
-        
-        *accel_vals[i] = lv_label_create(panel);
-        lv_label_set_text(*accel_vals[i], "0.00");
-        lv_obj_set_style_text_color(*accel_vals[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-        lv_obj_set_pos(*accel_vals[i], col1_x + val_offset, y);
-        y += row_h;
-    }
+    // Store references for updates (reusing existing statics)
+    imu9_accel_x = lbl1;
+    imu9_gyro_x = lbl2;
+    imu9_mag_x = lbl3;
     
-    // === LEFT COLUMN: Gyroscope ===
-    y += 4;
-    lv_obj_t *gyro_title = lv_label_create(panel);
-    lv_label_set_text(gyro_title, "Gyro (dps)");
-    lv_obj_set_style_text_color(gyro_title, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
-    lv_obj_set_pos(gyro_title, col1_x, y);
-    y += row_h;
-    
-    lv_obj_t **gyro_vals[] = {&imu9_gyro_x, &imu9_gyro_y, &imu9_gyro_z};
-    
-    for (int i = 0; i < 3; i++) {
-        lv_obj_t *lbl = lv_label_create(panel);
-        lv_label_set_text(lbl, labels[i]);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_set_pos(lbl, col1_x, y);
-        
-        *gyro_vals[i] = lv_label_create(panel);
-        lv_label_set_text(*gyro_vals[i], "0.00");
-        lv_obj_set_style_text_color(*gyro_vals[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-        lv_obj_set_pos(*gyro_vals[i], col1_x + val_offset, y);
-        y += row_h;
-    }
-    
-    // === RIGHT COLUMN: Magnetometer ===
-    y = 18;
-    lv_obj_t *mag_title = lv_label_create(panel);
-    lv_label_set_text(mag_title, "Mag (uT)");
-    lv_obj_set_style_text_color(mag_title, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
-    lv_obj_set_pos(mag_title, col2_x, y);
-    y += row_h;
-    
-    lv_obj_t **mag_vals[] = {&imu9_mag_x, &imu9_mag_y, &imu9_mag_z};
-    
-    for (int i = 0; i < 3; i++) {
-        lv_obj_t *lbl = lv_label_create(panel);
-        lv_label_set_text(lbl, labels[i]);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_set_pos(lbl, col2_x, y);
-        
-        *mag_vals[i] = lv_label_create(panel);
-        lv_label_set_text(*mag_vals[i], "0.00");
-        lv_obj_set_style_text_color(*mag_vals[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-        lv_obj_set_pos(*mag_vals[i], col2_x + val_offset, y);
-        y += row_h;
-    }
-    
-    printf("IMU9: Panel created\r\n");
+    printf("IMU9: Panel created successfully\r\n");
 }
 
 static void create_imu_panel(void) {
@@ -704,12 +653,10 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
         create_status_panel();
         create_log_panel();
         
-        // Profile-specific panels
-        if (profile == ROBOT_PROFILE_HEXAPOD) {
-            create_imu9_panel();
-        }
+        // Always create IMU9 panel (will be shown/hidden based on profile)
+        create_imu9_panel();
         
-        // Position panels
+        // Position panels (initially position all)
         for (int i = 0; i < num_panels; i++) {
             if (panels[i]) {
                 lv_obj_set_pos(panels[i], i * UI_SCREEN_WIDTH + 4, 0);
@@ -718,6 +665,17 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
         
         // Create page indicator
         create_page_indicator();
+    }
+    
+    // Show/hide IMU9 panel based on profile
+    if (imu9_panel) {
+        if (profile == ROBOT_PROFILE_HEXAPOD) {
+            lv_obj_remove_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
+            printf("Telemetry: IMU9 panel shown\r\n");
+        } else {
+            lv_obj_add_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
+            printf("Telemetry: IMU9 panel hidden\r\n");
+        }
     }
     
     printf("Telemetry: Configured for %s profile\r\n", 
