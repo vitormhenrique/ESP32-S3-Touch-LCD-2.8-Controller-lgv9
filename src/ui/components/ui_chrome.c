@@ -1,5 +1,6 @@
 #include "ui_chrome.h"
 #include "../ui_helpers.h"
+#include "../../Settings.h"
 #include <stdio.h>
 
 lv_obj_t *ui_HeaderPanel = NULL;
@@ -46,7 +47,7 @@ void ui_create_header(lv_obj_t *parent)
     lv_obj_set_style_border_side(ui_HeaderPanel, LV_BORDER_SIDE_BOTTOM, 0);
     
     ui_TitleLabel = lv_label_create(ui_HeaderPanel);
-    lv_label_set_text(ui_TitleLabel, "RC Control");
+    lv_label_set_text(ui_TitleLabel, Settings_GetRobotProfileName(Settings_Get()->robot_profile));
     lv_obj_add_style(ui_TitleLabel, &style_text_primary, 0);
     lv_obj_set_style_text_font(ui_TitleLabel, &lv_font_montserrat_10, 0);
     lv_obj_align(ui_TitleLabel, LV_ALIGN_LEFT_MID, 2, 0);
@@ -173,4 +174,10 @@ void ui_set_status(bool connected)
     lv_label_set_text(ui_StatusIcon, connected ? ICON_WIFI_ON : ICON_WIFI_OFF);
     lv_obj_set_style_text_color(ui_StatusIcon, 
         lv_color_hex(connected ? UI_COLOR_ACCENT_GREEN : UI_COLOR_ACCENT_ORANGE), 0);
+}
+
+void ui_set_title(const char *title)
+{
+    if (!ui_TitleLabel || !title) return;
+    lv_label_set_text(ui_TitleLabel, title);
 }

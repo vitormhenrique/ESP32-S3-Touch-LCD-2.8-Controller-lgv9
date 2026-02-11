@@ -53,6 +53,21 @@ static lv_obj_t *imu_accel_x = NULL;
 static lv_obj_t *imu_accel_y = NULL;
 static lv_obj_t *imu_accel_z = NULL;
 
+// 9-DOF IMU panel elements
+static lv_obj_t *imu9_panel = NULL;  // The panel itself (for show/hide)
+static lv_obj_t *imu9_accel_x = NULL;
+static lv_obj_t *imu9_accel_y = NULL;
+static lv_obj_t *imu9_accel_z = NULL;
+static lv_obj_t *imu9_gyro_x = NULL;
+static lv_obj_t *imu9_gyro_y = NULL;
+static lv_obj_t *imu9_gyro_z = NULL;
+static lv_obj_t *imu9_mag_x = NULL;
+static lv_obj_t *imu9_mag_y = NULL;
+static lv_obj_t *imu9_mag_z = NULL;
+
+// Track which profile panels are active
+static RobotProfile_t active_profile = ROBOT_PROFILE_GENERIC;
+
 //=============================================================================
 // Scroll Handling
 //=============================================================================
@@ -286,6 +301,95 @@ static void create_servo_panel(int page, int start_servo) {
         lv_obj_add_style(servo_temp_vals[servo_idx], &style_text_small, 0);
         lv_obj_align(servo_temp_vals[servo_idx], LV_ALIGN_BOTTOM_RIGHT, -2, -2);
     }
+}
+
+//=============================================================================
+// 9-DOF IMU Panel (Accel + Gyro + Magnetometer)
+// Uses the standard panel system - created as part of panels[]
+//=============================================================================
+
+static void create_imu9_panel(void) {
+    lv_obj_t *panel = create_panel_base("9-DOF IMU");
+    panels[num_panels++] = panel;
+    imu9_panel = panel;  // Keep reference for show/hide
+    
+    int row_h = 16;
+    int col1_x = 5;
+    int col2_x = 115;
+    int val_offset = 35;
+    int y = 18;
+    
+    // === LEFT COLUMN: Accelerometer ===
+    lv_obj_t *accel_title = lv_label_create(panel);
+    lv_label_set_text(accel_title, "Accel (g)");
+    lv_obj_set_style_text_color(accel_title, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_set_pos(accel_title, col1_x, y);
+    y += row_h;
+    
+    // Accel X/Y/Z
+    const char *labels[] = {"X:", "Y:", "Z:"};
+    lv_obj_t **accel_vals[] = {&imu9_accel_x, &imu9_accel_y, &imu9_accel_z};
+    
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *lbl = lv_label_create(panel);
+        lv_label_set_text(lbl, labels[i]);
+        lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_set_pos(lbl, col1_x, y);
+        
+        *accel_vals[i] = lv_label_create(panel);
+        lv_label_set_text(*accel_vals[i], "0.00");
+        lv_obj_set_style_text_color(*accel_vals[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        lv_obj_set_pos(*accel_vals[i], col1_x + val_offset, y);
+        y += row_h;
+    }
+    
+    // === LEFT COLUMN: Gyroscope ===
+    y += 4;
+    lv_obj_t *gyro_title = lv_label_create(panel);
+    lv_label_set_text(gyro_title, "Gyro (dps)");
+    lv_obj_set_style_text_color(gyro_title, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_set_pos(gyro_title, col1_x, y);
+    y += row_h;
+    
+    lv_obj_t **gyro_vals[] = {&imu9_gyro_x, &imu9_gyro_y, &imu9_gyro_z};
+    
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *lbl = lv_label_create(panel);
+        lv_label_set_text(lbl, labels[i]);
+        lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_set_pos(lbl, col1_x, y);
+        
+        *gyro_vals[i] = lv_label_create(panel);
+        lv_label_set_text(*gyro_vals[i], "0.00");
+        lv_obj_set_style_text_color(*gyro_vals[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        lv_obj_set_pos(*gyro_vals[i], col1_x + val_offset, y);
+        y += row_h;
+    }
+    
+    // === RIGHT COLUMN: Magnetometer ===
+    y = 18;
+    lv_obj_t *mag_title = lv_label_create(panel);
+    lv_label_set_text(mag_title, "Mag (uT)");
+    lv_obj_set_style_text_color(mag_title, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_set_pos(mag_title, col2_x, y);
+    y += row_h;
+    
+    lv_obj_t **mag_vals[] = {&imu9_mag_x, &imu9_mag_y, &imu9_mag_z};
+    
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *lbl = lv_label_create(panel);
+        lv_label_set_text(lbl, labels[i]);
+        lv_obj_set_style_text_color(lbl, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_set_pos(lbl, col2_x, y);
+        
+        *mag_vals[i] = lv_label_create(panel);
+        lv_label_set_text(*mag_vals[i], "0.00");
+        lv_obj_set_style_text_color(*mag_vals[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        lv_obj_set_pos(*mag_vals[i], col2_x + val_offset, y);
+        y += row_h;
+    }
+    
+    printf("IMU9: Panel created\r\n");
 }
 
 static void create_imu_panel(void) {
@@ -562,80 +666,62 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
     printf("Telemetry refresh: Starting for profile %d\r\n", profile);
     
     // Don't do anything if the screen hasn't been created yet
-    if (!panel_container || !ui_TelemetryScreen) {
+    if (!ui_TelemetryScreen) {
         printf("Telemetry refresh: Skipped - screen not created\r\n");
         return;
     }
     
-    printf("Telemetry refresh: Cleaning panels...\r\n");
-    // Clear existing panels
-    lv_obj_clean(panel_container);
+    active_profile = profile;
     
-    if (page_indicator) {
-        lv_obj_delete(page_indicator);
-        page_indicator = NULL;
-    }
-    
-    // Reset state
-    num_panels = 0;
-    current_panel = 0;
-    memset(panels, 0, sizeof(panels));
-    memset(page_dots, 0, sizeof(page_dots));
-    
-    // Reset element pointers
-    status_rssi_val = NULL;
-    status_latency_val = NULL;
-    status_errors_val = NULL;
-    status_uptime_val = NULL;
-    status_battery_val = NULL;
-    status_link_icon = NULL;
-    log_textarea = NULL;
-    memset(servo_panels, 0, sizeof(servo_panels));
-    memset(servo_pos_vals, 0, sizeof(servo_pos_vals));
-    memset(servo_load_bars, 0, sizeof(servo_load_bars));
-    memset(servo_temp_vals, 0, sizeof(servo_temp_vals));
-    memset(servo_status_icons, 0, sizeof(servo_status_icons));
-    imu_roll_val = NULL;
-    imu_pitch_val = NULL;
-    imu_yaw_val = NULL;
-    imu_horizon = NULL;
-    imu_horizon_line = NULL;
-    imu_accel_x = NULL;
-    imu_accel_y = NULL;
-    imu_accel_z = NULL;
-    printf("Telemetry refresh: State reset\r\n");
-    
-    // Common panels for all profiles
-    printf("Telemetry refresh: Creating status panel...\r\n");
-    create_status_panel();
-    printf("Telemetry refresh: Creating log panel...\r\n");
-    create_log_panel();
-    
-    // Profile-specific panels - ALL DISABLED FOR DEBUG
-    // if (profile == ROBOT_PROFILE_HEXAPOD) {
-    //     printf("Telemetry refresh: Creating hexapod panels...\r\n");
-    //     create_servo_panel(0, 0);
-    //     create_servo_panel(1, 6);
-    //     create_servo_panel(2, 12);
-    //     create_imu_panel();
-    //     create_hexapod_gait_panel();
-    // }
-    printf("Telemetry refresh: Panels created\r\n");
-    
-    // Position panels
-    for (int i = 0; i < num_panels; i++) {
-        if (panels[i]) {
-            lv_obj_set_pos(panels[i], i * UI_SCREEN_WIDTH + 4, 0);
+    // Only rebuild panels if they haven't been created yet
+    // (first time initialization)
+    if (num_panels == 0 && panel_container) {
+        printf("Telemetry refresh: Creating common panels...\r\n");
+        
+        // Reset element pointers
+        status_rssi_val = NULL;
+        status_latency_val = NULL;
+        status_errors_val = NULL;
+        status_uptime_val = NULL;
+        status_battery_val = NULL;
+        status_link_icon = NULL;
+        log_textarea = NULL;
+        memset(servo_panels, 0, sizeof(servo_panels));
+        memset(servo_pos_vals, 0, sizeof(servo_pos_vals));
+        memset(servo_load_bars, 0, sizeof(servo_load_bars));
+        memset(servo_temp_vals, 0, sizeof(servo_temp_vals));
+        memset(servo_status_icons, 0, sizeof(servo_status_icons));
+        imu_roll_val = NULL;
+        imu_pitch_val = NULL;
+        imu_yaw_val = NULL;
+        imu_horizon = NULL;
+        imu_horizon_line = NULL;
+        imu_accel_x = NULL;
+        imu_accel_y = NULL;
+        imu_accel_z = NULL;
+        
+        // Common panels for all profiles
+        create_status_panel();
+        create_log_panel();
+        
+        // Profile-specific panels
+        if (profile == ROBOT_PROFILE_HEXAPOD) {
+            create_imu9_panel();
         }
+        
+        // Position panels
+        for (int i = 0; i < num_panels; i++) {
+            if (panels[i]) {
+                lv_obj_set_pos(panels[i], i * UI_SCREEN_WIDTH + 4, 0);
+            }
+        }
+        
+        // Create page indicator
+        create_page_indicator();
     }
-    printf("Telemetry refresh: Panels positioned\r\n");
     
-    // Create page indicator
-    printf("Telemetry refresh: Creating page indicator...\r\n");
-    create_page_indicator();
-    
-    printf("Telemetry: Configured %d panels for %s profile\r\n", 
-           num_panels, Settings_GetRobotProfileName(profile));
+    printf("Telemetry: Configured for %s profile\r\n", 
+           Settings_GetRobotProfileName(profile));
 }
 
 void ui_telemetry_update_status(int rssi, int latency, int errors, uint32_t uptime) {
@@ -785,6 +871,54 @@ void ui_telemetry_update_imu(float roll, float pitch, float yaw, float ax, float
     if (imu_accel_z) {
         snprintf(buf, sizeof(buf), "Z:%.2f", (double)az);
         lv_label_set_text(imu_accel_z, buf);
+    }
+}
+
+void ui_telemetry_update_imu9(float ax, float ay, float az, 
+                              float gx, float gy, float gz,
+                              float mx, float my, float mz) {
+    char buf[16];
+    
+    // Update Accelerometer values
+    if (imu9_accel_x) {
+        snprintf(buf, sizeof(buf), "%.3f", (double)ax);
+        lv_label_set_text(imu9_accel_x, buf);
+    }
+    if (imu9_accel_y) {
+        snprintf(buf, sizeof(buf), "%.3f", (double)ay);
+        lv_label_set_text(imu9_accel_y, buf);
+    }
+    if (imu9_accel_z) {
+        snprintf(buf, sizeof(buf), "%.3f", (double)az);
+        lv_label_set_text(imu9_accel_z, buf);
+    }
+    
+    // Update Gyroscope values
+    if (imu9_gyro_x) {
+        snprintf(buf, sizeof(buf), "%.2f", (double)gx);
+        lv_label_set_text(imu9_gyro_x, buf);
+    }
+    if (imu9_gyro_y) {
+        snprintf(buf, sizeof(buf), "%.2f", (double)gy);
+        lv_label_set_text(imu9_gyro_y, buf);
+    }
+    if (imu9_gyro_z) {
+        snprintf(buf, sizeof(buf), "%.2f", (double)gz);
+        lv_label_set_text(imu9_gyro_z, buf);
+    }
+    
+    // Update Magnetometer values
+    if (imu9_mag_x) {
+        snprintf(buf, sizeof(buf), "%.2f", (double)mx);
+        lv_label_set_text(imu9_mag_x, buf);
+    }
+    if (imu9_mag_y) {
+        snprintf(buf, sizeof(buf), "%.2f", (double)my);
+        lv_label_set_text(imu9_mag_y, buf);
+    }
+    if (imu9_mag_z) {
+        snprintf(buf, sizeof(buf), "%.2f", (double)mz);
+        lv_label_set_text(imu9_mag_z, buf);
     }
 }
 

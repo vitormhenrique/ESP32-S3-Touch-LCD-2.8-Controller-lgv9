@@ -23,6 +23,9 @@ void ui_telemetry_add_log(const char *message);
 // Update functions for hexapod panels
 void ui_telemetry_update_servo(uint8_t index, int16_t position, int16_t load, uint8_t temp, bool error);
 void ui_telemetry_update_imu(float roll, float pitch, float yaw, float ax, float ay, float az);
+void ui_telemetry_update_imu9(float ax, float ay, float az, 
+                              float gx, float gy, float gz,
+                              float mx, float my, float mz);
 
 // Get current panel index
 uint8_t ui_telemetry_get_panel(void);

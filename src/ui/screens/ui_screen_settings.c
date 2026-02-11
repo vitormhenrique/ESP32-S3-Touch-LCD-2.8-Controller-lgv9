@@ -1,6 +1,8 @@
 #include "ui_screen_settings.h"
+#include "ui_screen_telemetry.h"
 #include "../ui_styles.h"
 #include "../ui_helpers.h"
+#include "../components/ui_chrome.h"
 #include "../../Settings.h"
 #include "../../ui_custom_integration.h"
 #include <stdio.h>
@@ -104,6 +106,9 @@ static void robot_select_cb(lv_event_t *e) {
     intptr_t profile = (intptr_t)lv_event_get_user_data(e);
     Settings_SetRobotProfile((RobotProfile_t)profile);
     update_robot_profile_selection((RobotProfile_t)profile);
+    ui_set_title(Settings_GetRobotProfileName((RobotProfile_t)profile));
+    // Refresh telemetry panels for the new profile
+    ui_telemetry_refresh_for_profile((RobotProfile_t)profile);
     printf("Settings: Robot profile set to %s\r\n", Settings_GetRobotProfileName((RobotProfile_t)profile));
 }
 

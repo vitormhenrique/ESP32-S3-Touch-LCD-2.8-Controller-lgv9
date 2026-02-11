@@ -28,6 +28,7 @@ void ui_update_nav_buttons(int active_screen_index);
 
 void ui_set_battery(uint8_t percent, int state); // int for BatteryState_t
 void ui_set_status(bool connected);
+void ui_set_title(const char *title);
 
 #ifdef __cplusplus
 }
