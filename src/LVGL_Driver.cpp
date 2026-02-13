@@ -118,9 +118,9 @@ void Lvgl_InitWithRotation(lcd_rotation_t rotation)
   esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000);
 }
 
-void Lvgl_Loop(void)
+uint32_t Lvgl_Loop(void)
 {
-  lv_timer_handler(); /* let the GUI do its work */
+  return lv_timer_handler(); /* let the GUI do its work, returns ms until next call */
 }
 
 /******************************************************************************

@@ -224,11 +224,15 @@ const char* ADS1X15_Driver::getPotentiometerName(uint8_t index) {
     return _potConfigs[index].name;
 }
 
-void ADS1X15_Driver::calibrateGimbalAxis(uint8_t index, int16_t min_val, int16_t center_val, int16_t max_val) {
+void ADS1X15_Driver::calibrateGimbalAxis(uint8_t index, int16_t min_val, int16_t center_val, int16_t max_val, int16_t deadzone, bool inverted) {
     if (index >= NUM_GIMBAL_AXES) return;
     _gimbalConfigs[index].min_raw = min_val;
     _gimbalConfigs[index].center_raw = center_val;
     _gimbalConfigs[index].max_raw = max_val;
+    _gimbalConfigs[index].deadzone = deadzone;
+    _gimbalConfigs[index].inverted = inverted;
+    printf("ADS1X15: Calibrated axis %d: min=%d, center=%d, max=%d, dz=%d, inv=%d\r\n",
+           index, min_val, center_val, max_val, deadzone, inverted);
 }
 
 void ADS1X15_Driver::calibratePotentiometer(uint8_t index, int16_t min_val, int16_t max_val) {

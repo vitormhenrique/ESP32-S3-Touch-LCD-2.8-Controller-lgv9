@@ -75,8 +75,10 @@ public:
      * @param min_val Raw value at minimum position
      * @param center_val Raw value at center position
      * @param max_val Raw value at maximum position
+     * @param deadzone Deadzone around center
+     * @param inverted True to invert axis direction
      */
-    void calibrateGimbalAxis(uint8_t index, int16_t min_val, int16_t center_val, int16_t max_val);
+    void calibrateGimbalAxis(uint8_t index, int16_t min_val, int16_t center_val, int16_t max_val, int16_t deadzone = 200, bool inverted = false);
     
     /**
      * Set calibration for a potentiometer

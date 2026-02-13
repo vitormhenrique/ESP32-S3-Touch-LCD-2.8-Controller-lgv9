@@ -464,7 +464,7 @@
 
 /** Add a custom handler when assert happens e.g. to restart MCU. */
 #define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
-#define LV_ASSERT_HANDLER while(1);     /**< Halt by default */
+#define LV_ASSERT_HANDLER { *(volatile int *)0 = 0; }  /**< Crash immediately for debugging */
 
 /*-------------
  * Debug
