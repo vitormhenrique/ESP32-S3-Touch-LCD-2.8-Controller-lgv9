@@ -3,6 +3,7 @@
 #include "InputConfig.h"
 #include "MCP23017_Driver.h"
 #include "ADS1X15_Driver.h"
+#include "Encoder_Driver.h"
 
 /******************************************************************************
  * RC Input Manager
@@ -10,6 +11,7 @@
  * Unified interface for all RC remote inputs:
  * - Switches (via MCP23017)
  * - 3-position toggles (via MCP23017)
+ * - Encoders (via MCP23017 with interrupts)
  * - Gimbals (via ADS1X15)
  * - Potentiometers (via ADS1X15)
  ******************************************************************************/
@@ -102,6 +104,35 @@ public:
      * Check if toggle position changed
      */
     bool toggleChanged(uint8_t index) { return SwitchInput.toggle3PosChanged(index); }
+    
+    //=========================================================================
+    // Encoder Access
+    //=========================================================================
+    
+    /**
+     * Get encoder position
+     */
+    int32_t getEncoderPosition(uint8_t index) { return EncoderInput.getPosition(index); }
+    
+    /**
+     * Get encoder delta since last call
+     */
+    int32_t getEncoderDelta(uint8_t index) { return EncoderInput.getDelta(index); }
+    
+    /**
+     * Reset encoder position to zero
+     */
+    void resetEncoder(uint8_t index) { EncoderInput.resetPosition(index); }
+    
+    /**
+     * Check if encoder has moved
+     */
+    bool encoderMoved(uint8_t index) { return EncoderInput.hasMoved(index); }
+    
+    /**
+     * Get encoder direction (1=CW, -1=CCW, 0=none)
+     */
+    int8_t getEncoderDirection(uint8_t index) { return EncoderInput.getDirection(index); }
     
     //=========================================================================
     // Gimbal Access

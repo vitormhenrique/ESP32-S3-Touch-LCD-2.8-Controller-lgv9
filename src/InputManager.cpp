@@ -14,8 +14,9 @@ bool InputManager::begin() {
     
     bool switchOk = SwitchInput.begin();
     bool analogOk = AnalogInput.begin();
+    bool encoderOk = EncoderInput.begin();
     
-    _initialized = switchOk && analogOk;
+    _initialized = switchOk && analogOk && encoderOk;
     
     if (_initialized) {
         printf("RC Input Manager: All systems OK\r\n");
@@ -23,6 +24,7 @@ bool InputManager::begin() {
         printf("RC Input Manager: Initialization FAILED\r\n");
         if (!switchOk) printf("  - Switch input (MCP23017) failed\r\n");
         if (!analogOk) printf("  - Analog input (ADS1X15) failed\r\n");
+        if (!encoderOk) printf("  - Encoder input failed\r\n");
     }
     
     printf("=======================================\r\n");
@@ -43,10 +45,13 @@ void InputManager::update() {
     
     // Update analog inputs
     AnalogInput.update();
+    
+    // Process encoder interrupts (also done in LVGL loop, but good to do here too)
+    EncoderInput.processInterrupt();
 }
 
 bool InputManager::isReady() {
-    return _initialized && SwitchInput.isReady() && AnalogInput.isReady();
+    return _initialized && SwitchInput.isReady() && AnalogInput.isReady() && EncoderInput.isReady();
 }
 
 void InputManager::printDebug() {
@@ -63,6 +68,11 @@ void InputManager::printDebug() {
     printf("Potentiometers:\r\n");
     printf("  POT 1: %4d (raw: %5d)\r\n", getPot(POT_1), getPotRaw(POT_1));
     printf("  POT 2: %4d (raw: %5d)\r\n", getPot(POT_2), getPotRaw(POT_2));
+    
+    // Print encoder values
+    printf("Encoders:\r\n");
+    printf("  ENC 1: pos=%ld, dir=%d\r\n", getEncoderPosition(ENCODER_1), getEncoderDirection(ENCODER_1));
+    printf("  ENC 2: pos=%ld, dir=%d\r\n", getEncoderPosition(ENCODER_2), getEncoderDirection(ENCODER_2));
     
     // Print 3-position toggles
     printf("3-Position Toggles:\r\n");

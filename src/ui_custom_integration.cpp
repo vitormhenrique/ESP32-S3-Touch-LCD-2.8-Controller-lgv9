@@ -5,11 +5,9 @@
 
 #include "ui_custom_integration.h"
 #include "InputManager.h"
+#include "Encoder_Driver.h"
 #include "Settings.h"
 #include "ui/screens/ui_screen_settings.h"
-
-// Encoder state tracking (you'll need to implement encoder reading)
-static int32_t encoder_values[2] = {0, 0};
 
 void ui_update_from_inputs(void)
 {
@@ -82,11 +80,10 @@ void ui_update_from_inputs(void)
     
     //=========================================================================
     // Update Encoders
-    // Note: You'll need to implement encoder reading in your InputManager
-    // or create a separate encoder driver. For now, this is a placeholder.
+    // Now using actual encoder values from the Encoder_Driver
     //=========================================================================
-    ui_set_encoder(0, encoder_values[0]);
-    ui_set_encoder(1, encoder_values[1]);
+    ui_set_encoder(0, RCInput.getEncoderPosition(ENCODER_1));
+    ui_set_encoder(1, RCInput.getEncoderPosition(ENCODER_2));
     
     //=========================================================================
     // Update Gimbal Calibration Display
@@ -103,17 +100,15 @@ void ui_update_from_inputs(void)
 // Call these from your encoder ISR or polling routine
 void ui_encoder_increment(uint8_t index, int32_t delta)
 {
-    if (index < 2) {
-        encoder_values[index] += delta;
-        ui_set_encoder(index, encoder_values[index]);
-    }
+    // No longer needed - encoder is handled by Encoder_Driver and LVGL
+    (void)index;
+    (void)delta;
 }
 
 void ui_encoder_set(uint8_t index, int32_t value)
 {
-    if (index < 2) {
-        encoder_values[index] = value;
-        ui_set_encoder(index, encoder_values[index]);
+    if (index < ENCODER_COUNT) {
+        EncoderInput.setPosition(index, value);
     }
 }
 

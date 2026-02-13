@@ -65,7 +65,7 @@ void setup()
   Lvgl_Init();
   
   Settings_Init();  // Initialize settings (memory-only)
-  Perf_Init();      // Initialize performance monitor (if DEBUG_PERF enabled)
+  // Note: Perf_Init moved to loop() to ensure CDC is ready
 
   ui_custom_init();  // Use custom UI
 
@@ -74,6 +74,14 @@ void setup()
 
 void loop()
 {
+  static bool perf_initialized = false;
+  
+  // Initialize perf monitor after BLE test completes (takes ~8 seconds)
+  if (!perf_initialized && millis() > 9000) {
+    Perf_Init();
+    perf_initialized = true;
+  }
+  
   Perf_StartSection(PERF_COUNTER_MAIN_LOOP);
   
   Perf_StartSection(PERF_COUNTER_LVGL_LOOP);

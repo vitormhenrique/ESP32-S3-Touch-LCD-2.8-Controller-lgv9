@@ -11,6 +11,8 @@
     - Touch coordinates are transformed to match display rotation
 ******************************************************************************/
 #include "LVGL_Driver.h"
+#include "Encoder_Driver.h"
+#include "MCP23017_Driver.h"
 
 static uint8_t buf1[LVGL_BUF_LEN * sizeof(lv_color_t)];
 static uint8_t buf2[LVGL_BUF_LEN * sizeof(lv_color_t)];
@@ -18,6 +20,11 @@ static uint8_t buf2[LVGL_BUF_LEN * sizeof(lv_color_t)];
 /* Store display pointer for rotation updates */
 static lv_display_t *lvgl_display = NULL;
 static lv_indev_t *lvgl_indev = NULL;
+static lv_indev_t *lvgl_encoder_indev = NULL;
+static lv_group_t *lvgl_default_group = NULL;
+
+/* Encoder button pin - using NAV2_C (center) as encoder button */
+#define ENCODER_BUTTON_INDEX  21  // NAV2_C in SWITCH_CONFIGS
 
 /* Serial debugging */
 void Lvgl_print(const char * buf)
@@ -56,6 +63,24 @@ void Lvgl_Touchpad_Read(lv_indev_t * indev, lv_indev_data_t * data)
     data->point.y = y;
     data->state = LV_INDEV_STATE_PRESSED;
     // printf("LVGL  : X=%u Y=%u (raw: %u,%u) num=%d\r\n", x, y, touchpad_x[0], touchpad_y[0], touchpad_cnt);
+  } else {
+    data->state = LV_INDEV_STATE_RELEASED;
+  }
+}
+
+/*Read the encoder*/
+void Lvgl_Encoder_Read(lv_indev_t * indev, lv_indev_data_t * data)
+{
+  // Process any pending encoder interrupts
+  EncoderInput.processInterrupt();
+  
+  // Get encoder delta (using encoder 1 as main UI encoder)
+  int32_t delta = EncoderInput.getDelta(ENCODER_1);
+  data->enc_diff = delta;
+  
+  // Check encoder button (using NAV2 center button)
+  if (SwitchInput.getSwitchState(ENCODER_BUTTON_INDEX) == SWITCH_ON) {
+    data->state = LV_INDEV_STATE_PRESSED;
   } else {
     data->state = LV_INDEV_STATE_RELEASED;
   }
@@ -104,10 +129,15 @@ void Lvgl_InitWithRotation(lcd_rotation_t rotation)
   lv_indev_set_type(lvgl_indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(lvgl_indev, Lvgl_Touchpad_Read);
 
-  /* Create simple label */
-  lv_obj_t *label = lv_label_create(lv_scr_act());
-  lv_label_set_text(label, "Hello Arduino and LVGL!");
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+  /*Initialize the encoder input device*/
+  lvgl_encoder_indev = lv_indev_create();
+  lv_indev_set_type(lvgl_encoder_indev, LV_INDEV_TYPE_ENCODER);
+  lv_indev_set_read_cb(lvgl_encoder_indev, Lvgl_Encoder_Read);
+  
+  /* Create default group for encoder navigation */
+  lvgl_default_group = lv_group_create();
+  lv_group_set_default(lvgl_default_group);
+  lv_indev_set_group(lvgl_encoder_indev, lvgl_default_group);
 
   const esp_timer_create_args_t lvgl_tick_timer_args = {
     .callback = &example_increase_lvgl_tick,
@@ -118,8 +148,21 @@ void Lvgl_InitWithRotation(lcd_rotation_t rotation)
   esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000);
 }
 
+lv_indev_t* Lvgl_GetEncoderIndev(void)
+{
+  return lvgl_encoder_indev;
+}
+
+lv_group_t* Lvgl_GetDefaultGroup(void)
+{
+  return lvgl_default_group;
+}
+
 uint32_t Lvgl_Loop(void)
 {
+  // Process encoder interrupts each loop
+  EncoderInput.processInterrupt();
+  
   return lv_timer_handler(); /* let the GUI do its work, returns ms until next call */
 }
 
