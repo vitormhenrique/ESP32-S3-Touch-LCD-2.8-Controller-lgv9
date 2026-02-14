@@ -69,7 +69,7 @@ static void create_page1_content(lv_obj_t *page)
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     // 4 Buttons
-    const char *btn_names[] = {"B1", "B2", "B3", "B4"};
+    const char *btn_names[] = {"B1", "B3", "B4"};
     for (int i = 0; i < 4; i++) {
         lv_obj_t *btn_cont = lv_obj_create(row);
         lv_obj_set_size(btn_cont, 34, INPUT_PANEL_HEIGHT - 12);

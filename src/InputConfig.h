@@ -111,7 +111,7 @@ typedef struct {
 //=============================================================================
 
 // Number of each input type
-#define NUM_SWITCHES        26      // 12 original + 10 Nav switches (2x5) + 4 Encoder pins
+#define NUM_SWITCHES        25      // 11 original + 10 Nav switches (2x5) + 4 Encoder pins
 #define NUM_3POS_TOGGLES    2       // Two 3-position toggle switches
 #define NUM_GIMBAL_AXES     4       // 2 gimbals x 2 axes each
 #define NUM_POTENTIOMETERS  2       // 2 potentiometers
@@ -139,7 +139,6 @@ typedef struct {
     { "SW_H",    0, 15, SWITCH_TYPE_TOGGLE_2POS, true }, \
     /* Buttons */ \
     { "BTN_1",   1, 15, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B7 */ \
-    { "BTN_2",   0,  7, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 0 A7 */ \
     { "BTN_3",   1,  4, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 A4 */ \
     { "BTN_4",   1,  5, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 A5 */ \
     /* Nav Switch 1 (Left) - Expander 1 Port B */ \
@@ -180,10 +179,10 @@ typedef struct {
 // Gimbal axes configuration
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 #define GIMBAL_CONFIGS { \
-    { "LEFT_X",   0, 0,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 0 */ \
-    { "LEFT_Y",   0, 1,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 1 */ \
-    { "RIGHT_X",  1, 0,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 0 */ \
-    { "RIGHT_Y",  1, 1,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 1 */ \
+    { "LEFT_Y",   0, 0,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 0 */ \
+    { "LEFT_X",   0, 1,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 1 */ \
+    { "RIGHT_Y",  1, 0,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 0 */ \
+    { "RIGHT_X",  1, 1,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 1 */ \
 }
 
 // Potentiometer configurations  
