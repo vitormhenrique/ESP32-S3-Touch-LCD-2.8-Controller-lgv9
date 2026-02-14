@@ -45,6 +45,14 @@ typedef struct {
     volatile int32_t last_position; // Last reported position
     volatile uint8_t last_state;    // Last AB state for gray code
     volatile int8_t direction;      // Last direction: 1=CW, -1=CCW, 0=none
+    
+    // Debouncing and velocity tracking
+    volatile uint32_t last_change_time_us;  // Microseconds of last state change
+    volatile uint32_t pulse_interval_us;    // Interval between last two pulses
+    volatile uint8_t stable_count;          // Consecutive stable readings
+    volatile uint8_t pending_state;         // State waiting to be confirmed
+    volatile int32_t velocity;              // Current velocity (pulses per second)
+    volatile int32_t accumulated_delta;     // Accumulated delta for acceleration
 } EncoderState_t;
 
 // Default encoder configurations
@@ -69,6 +77,12 @@ public:
      * Reads MCP23017 interrupt capture registers
      */
     void processInterrupt();
+    
+    /**
+     * Poll encoders - called by dedicated task at high frequency
+     * Thread-safe with mutex protection
+     */
+    void pollEncoders();
     
     /**
      * Get current encoder position
@@ -112,6 +126,20 @@ public:
     bool hasMoved(uint8_t index);
     
     /**
+     * Get velocity-adjusted delta (accelerated value based on rotation speed)
+     * @param index Encoder index (0 or 1)
+     * @return Accelerated delta value
+     */
+    int32_t getAcceleratedDelta(uint8_t index);
+    
+    /**
+     * Get current velocity (pulses per second)
+     * @param index Encoder index
+     * @return Velocity in pulses/sec
+     */
+    int32_t getVelocity(uint8_t index);
+    
+    /**
      * Check if driver is ready
      */
     bool isReady() { return _initialized; }
@@ -145,5 +173,5 @@ private:
 // Global instance
 extern Encoder_Driver EncoderInput;
 
-// ISR handler (needs to be called from global ISR)
-void IRAM_ATTR encoder_isr_handler();
+// ISR handler declaration (defined in .cpp)
+void encoder_isr_handler();

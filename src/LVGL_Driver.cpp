@@ -74,8 +74,8 @@ void Lvgl_Encoder_Read(lv_indev_t * indev, lv_indev_data_t * data)
   // Process any pending encoder interrupts
   EncoderInput.processInterrupt();
   
-  // Get encoder delta (using encoder 1 as main UI encoder)
-  int32_t delta = EncoderInput.getDelta(ENCODER_1);
+  // Get accelerated encoder delta (velocity-based) for natural feel
+  int32_t delta = EncoderInput.getAcceleratedDelta(ENCODER_1);
   data->enc_diff = delta;
   
   // Check encoder button (using NAV2 center button)

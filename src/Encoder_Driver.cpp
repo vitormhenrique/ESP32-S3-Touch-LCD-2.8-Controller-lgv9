@@ -34,12 +34,39 @@ static const int8_t ENCODER_LOOKUP[16] = {
      0   // 11 -> 11: no change
 };
 
+// Encoder task configuration
+#define ENCODER_TASK_STACK_SIZE     2048
+#define ENCODER_TASK_PRIORITY       5       // High priority for responsive input
+#define ENCODER_POLL_INTERVAL_MS    1       // Poll every 1ms for fast response
+
+// Velocity and acceleration configuration
+#define ENCODER_VELOCITY_WINDOW_MS  50      // Time window to measure velocity
+#define ENCODER_ACCEL_SLOW_THRESH   5       // Below this: 1x multiplier
+#define ENCODER_ACCEL_MED_THRESH    15      // Below this: 2x multiplier  
+#define ENCODER_ACCEL_FAST_THRESH   30      // Below this: 4x multiplier
+#define ENCODER_ACCEL_MAX_MULT      8       // Above fast: 8x multiplier
+
+// Debug logging control
+#define ENCODER_DEBUG_LOG           1       // Set to 1 for verbose logging, 0 to disable
+
+// Task handle for encoder polling
+static TaskHandle_t _encoderTaskHandle = NULL;
+static SemaphoreHandle_t _encoderMutex = NULL;
+
 // Volatile flag for ISR
 static volatile bool _interruptPending = false;
 
-// ISR handler - keep it minimal
+// Forward declaration of task function
+static void encoderPollingTask(void* param);
+
+// ISR handler - just signal the task
 void IRAM_ATTR encoder_isr_handler() {
     _interruptPending = true;
+    if (_encoderTaskHandle != NULL) {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(_encoderTaskHandle, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
 }
 
 Encoder_Driver::Encoder_Driver() {
@@ -52,6 +79,12 @@ Encoder_Driver::Encoder_Driver() {
         _states[i].last_position = 0;
         _states[i].last_state = 0;
         _states[i].direction = 0;
+        _states[i].last_change_time_us = 0;
+        _states[i].pulse_interval_us = 0;
+        _states[i].stable_count = 0;
+        _states[i].pending_state = 0xFF;  // Invalid state
+        _states[i].velocity = 0;
+        _states[i].accumulated_delta = 0;
     }
 }
 
@@ -79,14 +112,58 @@ bool Encoder_Driver::begin() {
                _states[i].last_state & 1);
     }
     
+    // Create mutex for thread-safe access
+    _encoderMutex = xSemaphoreCreateMutex();
+    if (_encoderMutex == NULL) {
+        printf("Encoder_Driver: ERROR - Failed to create mutex\r\n");
+        return false;
+    }
+    
     // Attach interrupt - falling edge since MCP23017 INT is active low
     attachInterrupt(digitalPinToInterrupt(MCP23017_INT_PIN), encoder_isr_handler, FALLING);
     
     _initialized = true;
-    printf("Encoder_Driver: Initialized on GPIO%d (polling + interrupt)\r\n", MCP23017_INT_PIN);
+    
+    // Create dedicated encoder polling task
+    BaseType_t result = xTaskCreatePinnedToCore(
+        encoderPollingTask,
+        "EncoderTask",
+        ENCODER_TASK_STACK_SIZE,
+        this,
+        ENCODER_TASK_PRIORITY,
+        &_encoderTaskHandle,
+        1  // Run on Core 1
+    );
+    
+    if (result != pdPASS) {
+        printf("Encoder_Driver: ERROR - Failed to create encoder task\r\n");
+        return false;
+    }
+    
+    printf("Encoder_Driver: Initialized with dedicated task (poll every %dms)\r\n", ENCODER_POLL_INTERVAL_MS);
     printf("Encoder_Driver: Ready - rotate encoders to test\r\n");
     
     return true;
+}
+
+// Dedicated encoder polling task - runs continuously at high frequency
+static void encoderPollingTask(void* param) {
+    Encoder_Driver* driver = (Encoder_Driver*)param;
+    TickType_t lastWakeTime = xTaskGetTickCount();
+    
+    printf("[ENCODER_TASK] Started on core %d\r\n", xPortGetCoreID());
+    
+    while (true) {
+        // Wait for interrupt OR timeout (poll interval)
+        uint32_t notifyValue = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(ENCODER_POLL_INTERVAL_MS));
+        (void)notifyValue;  // We poll regardless
+        
+        // Poll encoders
+        driver->pollEncoders();
+        
+        // Small yield to prevent starving other tasks
+        taskYIELD();
+    }
 }
 
 void Encoder_Driver::configureMCP23017Interrupts() {
@@ -211,15 +288,29 @@ uint8_t Encoder_Driver::readEncoderPins(uint8_t index) {
     return state;
 }
 
+// Simple and fast encoder processing - NO debouncing for gray code!
+// Gray code transitions are inherently valid, just use the lookup table
 void Encoder_Driver::processEncoder(uint8_t index, uint8_t new_state) {
     if (index >= ENCODER_COUNT) return;
     
     EncoderState_t* state = &_states[index];
     EncoderConfig_t* cfg = &_configs[index];
     
+    // If state hasn't changed, nothing to do
+    if (new_state == state->last_state) {
+        return;
+    }
+    
+    uint32_t now_ms = millis();
+    
     // Look up direction from gray code table
     uint8_t lookup_index = (state->last_state << 2) | new_state;
     int8_t dir = ENCODER_LOOKUP[lookup_index];
+    
+#if ENCODER_DEBUG_LOG
+    printf("[ENC%d] %X->%X dir=%d pos=%ld\r\n", 
+           index, state->last_state, new_state, dir, state->position);
+#endif
     
     if (dir != 0) {
         // Apply inversion if configured
@@ -227,36 +318,44 @@ void Encoder_Driver::processEncoder(uint8_t index, uint8_t new_state) {
             dir = -dir;
         }
         
+        // Update position
         state->position += dir;
         state->direction = dir;
+        
+        // Track pulses for velocity calculation
+        state->accumulated_delta += dir;
+        
+        // Update velocity (pulses in the last window)
+        uint32_t elapsed_ms = now_ms - state->last_change_time_us;  // Reusing field for ms
+        if (elapsed_ms > 0 && elapsed_ms < 1000) {
+            // Estimate pulses per second from this interval
+            state->velocity = 1000 / elapsed_ms;
+        }
     }
     
     state->last_state = new_state;
+    state->last_change_time_us = now_ms;  // Store ms for velocity calc
 }
 
-void Encoder_Driver::processInterrupt() {
+// Called by the dedicated polling task - fast and simple
+void Encoder_Driver::pollEncoders() {
     if (!_initialized) return;
     
-    // Always poll the encoders (don't rely solely on interrupt)
-    // This ensures we catch all transitions even if interrupt is missed
-    
-    // Clear interrupt flag if set
-    if (_interruptPending) {
-        _interruptPending = false;
-    }
-    
-    // Read all encoder pins and process state changes
-    for (uint8_t i = 0; i < ENCODER_COUNT; i++) {
-        uint8_t new_state = readEncoderPins(i);
-        if (new_state != _states[i].last_state) {
-            uint8_t old_state = _states[i].last_state;  // Save before processing
+    // Take mutex for thread safety
+    if (_encoderMutex != NULL && xSemaphoreTake(_encoderMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        for (uint8_t i = 0; i < ENCODER_COUNT; i++) {
+            uint8_t new_state = readEncoderPins(i);
             processEncoder(i, new_state);
-            // Debug output when encoder changes
-            printf("ENC%d: state 0x%02X->0x%02X, pos=%ld, dir=%d\r\n",
-                   i, old_state, new_state, 
-                   _states[i].position, _states[i].direction);
         }
+        xSemaphoreGive(_encoderMutex);
     }
+    
+    _interruptPending = false;
+}
+
+// Legacy function - now just calls pollEncoders
+void Encoder_Driver::processInterrupt() {
+    pollEncoders();
 }
 
 int32_t Encoder_Driver::getPosition(uint8_t index) {
@@ -292,6 +391,55 @@ int8_t Encoder_Driver::getDirection(uint8_t index) {
 bool Encoder_Driver::hasMoved(uint8_t index) {
     if (index >= ENCODER_COUNT) return false;
     return _states[index].position != _states[index].last_position;
+}
+
+int32_t Encoder_Driver::getVelocity(uint8_t index) {
+    if (index >= ENCODER_COUNT) return 0;
+    return _states[index].velocity;
+}
+
+int32_t Encoder_Driver::getAcceleratedDelta(uint8_t index) {
+    if (index >= ENCODER_COUNT) return 0;
+    
+    // Take mutex for thread safety
+    if (_encoderMutex != NULL && xSemaphoreTake(_encoderMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+        return 0;
+    }
+    
+    // Get raw delta
+    int32_t delta = _states[index].position - _states[index].last_position;
+    _states[index].last_position = _states[index].position;
+    int32_t velocity = _states[index].velocity;
+    
+    if (_encoderMutex != NULL) {
+        xSemaphoreGive(_encoderMutex);
+    }
+    
+    if (delta == 0) return 0;
+    
+    // Calculate acceleration multiplier based on velocity (pulses per second)
+    int32_t multiplier = 1;
+    
+    if (velocity >= ENCODER_ACCEL_FAST_THRESH) {
+        multiplier = ENCODER_ACCEL_MAX_MULT;  // 8x for very fast rotation
+    } else if (velocity >= ENCODER_ACCEL_MED_THRESH) {
+        multiplier = 4;  // 4x for medium-fast rotation
+    } else if (velocity >= ENCODER_ACCEL_SLOW_THRESH) {
+        multiplier = 2;  // 2x for moderate rotation
+    }
+    // else multiplier stays 1 for slow rotation
+    
+    // Apply acceleration, preserving direction
+    int32_t accelerated = delta * multiplier;
+    
+#if ENCODER_DEBUG_LOG
+    if (accelerated != 0) {
+        printf("[ENC%d] ACCEL: delta=%ld vel=%ld mult=%ld result=%ld\r\n", 
+               index, delta, velocity, multiplier, accelerated);
+    }
+#endif
+    
+    return accelerated;
 }
 
 void Encoder_Driver::printDebug() {

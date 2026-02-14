@@ -4,6 +4,9 @@
 // Global instance
 MCP23017_Driver SwitchInput;
 
+// I2C mutex for thread-safe access
+static SemaphoreHandle_t _i2cMutex = NULL;
+
 // Static configuration arrays
 static const SwitchConfig_t _defaultSwitchConfigs[NUM_SWITCHES] = SWITCH_CONFIGS;
 static const Toggle3PosConfig_t _defaultToggle3PosConfigs[NUM_3POS_TOGGLES] = TOGGLE_3POS_CONFIGS;
@@ -34,6 +37,15 @@ void MCP23017_Driver::initConfigs() {
 
 bool MCP23017_Driver::begin() {
     initConfigs();
+    
+    // Create I2C mutex for thread-safe access
+    if (_i2cMutex == NULL) {
+        _i2cMutex = xSemaphoreCreateMutex();
+        if (_i2cMutex == NULL) {
+            printf("MCP23017: ERROR - Failed to create I2C mutex\r\n");
+            return false;
+        }
+    }
     
     // Initialize first MCP23017
     if (_mcp[0].begin_I2C(MCP23017_ADDR_1, &Wire)) {
@@ -89,8 +101,8 @@ void MCP23017_Driver::updateSwitch(uint8_t index) {
     // Check if expander is initialized
     if (!_initialized[cfg->expander]) return;
     
-    // Read pin state
-    bool pinState = _mcp[cfg->expander].digitalRead(cfg->pin);
+    // Read pin state (uses mutex internally)
+    bool pinState = readPin(cfg->expander, cfg->pin);
     
     // Apply inversion if needed
     if (cfg->inverted) {
@@ -119,9 +131,9 @@ void MCP23017_Driver::updateToggle3Pos(uint8_t index) {
     // Check if expander is initialized
     if (!_initialized[cfg->expander]) return;
     
-    // Read both pins
-    bool pinUp = _mcp[cfg->expander].digitalRead(cfg->pin_up);
-    bool pinDown = _mcp[cfg->expander].digitalRead(cfg->pin_down);
+    // Read both pins (uses mutex internally)
+    bool pinUp = readPin(cfg->expander, cfg->pin_up);
+    bool pinDown = readPin(cfg->expander, cfg->pin_down);
     
     // Apply inversion if needed
     if (cfg->inverted) {
@@ -192,7 +204,14 @@ const char* MCP23017_Driver::getToggle3PosName(uint8_t index) {
 bool MCP23017_Driver::readPin(uint8_t expander, uint8_t pin) {
     if (expander > 1 || pin > 15) return false;
     if (!_initialized[expander]) return false;
-    return _mcp[expander].digitalRead(pin);
+    
+    // Thread-safe I2C access
+    bool result = false;
+    if (_i2cMutex != NULL && xSemaphoreTake(_i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        result = _mcp[expander].digitalRead(pin);
+        xSemaphoreGive(_i2cMutex);
+    }
+    return result;
 }
 
 bool MCP23017_Driver::isReady() {
