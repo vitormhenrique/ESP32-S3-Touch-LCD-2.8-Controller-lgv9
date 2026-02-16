@@ -24,7 +24,7 @@ static lv_indev_t *lvgl_encoder_indev = NULL;
 static lv_group_t *lvgl_default_group = NULL;
 
 /* Encoder button pin - using NAV2_C (center) as encoder button */
-#define ENCODER_BUTTON_INDEX  21  // NAV2_C in SWITCH_CONFIGS
+#define ENCODER_BUTTON_INDEX  20  // NAV2_C in SWITCH_CONFIGS
 
 /* Serial debugging */
 void Lvgl_print(const char * buf)
@@ -71,9 +71,6 @@ void Lvgl_Touchpad_Read(lv_indev_t * indev, lv_indev_data_t * data)
 /*Read the encoder*/
 void Lvgl_Encoder_Read(lv_indev_t * indev, lv_indev_data_t * data)
 {
-  // Process any pending encoder interrupts
-  EncoderInput.processInterrupt();
-  
   // Get accelerated encoder delta (velocity-based) for natural feel
   int32_t delta = EncoderInput.getAcceleratedDelta(ENCODER_1);
   data->enc_diff = delta;
@@ -160,9 +157,6 @@ lv_group_t* Lvgl_GetDefaultGroup(void)
 
 uint32_t Lvgl_Loop(void)
 {
-  // Process encoder interrupts each loop
-  EncoderInput.processInterrupt();
-  
   return lv_timer_handler(); /* let the GUI do its work, returns ms until next call */
 }
 

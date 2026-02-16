@@ -7,7 +7,9 @@
 #include "InputManager.h"
 #include "Encoder_Driver.h"
 #include "Settings.h"
+#include "BAT_Driver.h"
 #include "ui/screens/ui_screen_settings.h"
+#include "CRSF_Manager.h"
 
 void ui_update_from_inputs(void)
 {
@@ -50,32 +52,31 @@ void ui_update_from_inputs(void)
     
     //=========================================================================
     // Update Buttons (momentary switches)
-    // Adjust the indices based on your InputConfig.h SWITCH_CONFIGS
+    // BTN_1=idx 8, BTN_3=idx 9, BTN_4=idx 10 (BTN_2 removed)
     //=========================================================================
-    // Assuming switches 8-11 are your momentary buttons
-    for (uint8_t i = 0; i < 4; i++) {
+    for (uint8_t i = 0; i < 3; i++) {
         ui_set_button(i, RCInput.isSwitchOn(8 + i));
     }
     
     //=========================================================================
     // Update Nav Switches
-    // Nav 1: Indices 12-16 (U, D, L, R, C)
-    // Nav 2: Indices 17-21 (U, D, L, R, C)
+    // Nav 1: Indices 11-15 (U, D, L, R, C)
+    // Nav 2: Indices 16-20 (U, D, L, R, C)
     //=========================================================================
-    ui_set_nav_switch(0, 
-        RCInput.isSwitchOn(12), // Up
-        RCInput.isSwitchOn(13), // Down
-        RCInput.isSwitchOn(14), // Left
-        RCInput.isSwitchOn(15), // Right
-        RCInput.isSwitchOn(16)  // Center
+    ui_set_nav_switch(0,
+        RCInput.isSwitchOn(11), // Up
+        RCInput.isSwitchOn(12), // Down
+        RCInput.isSwitchOn(13), // Left
+        RCInput.isSwitchOn(14), // Right
+        RCInput.isSwitchOn(15)  // Center
     );
-    
-    ui_set_nav_switch(1, 
-        RCInput.isSwitchOn(17), // Up
-        RCInput.isSwitchOn(18), // Down
-        RCInput.isSwitchOn(19), // Left
-        RCInput.isSwitchOn(20), // Right
-        RCInput.isSwitchOn(21)  // Center
+
+    ui_set_nav_switch(1,
+        RCInput.isSwitchOn(16), // Up
+        RCInput.isSwitchOn(17), // Down
+        RCInput.isSwitchOn(18), // Left
+        RCInput.isSwitchOn(19), // Right
+        RCInput.isSwitchOn(20)  // Center
     );
     
     //=========================================================================
@@ -95,6 +96,18 @@ void ui_update_from_inputs(void)
     gimbal_raw[2] = RCInput.getGimbalRaw(GIMBAL_RIGHT_X);
     gimbal_raw[3] = RCInput.getGimbalRaw(GIMBAL_RIGHT_Y);
     ui_gimbal_cal_update(gimbal_raw);
+
+    //=========================================================================
+    // Update battery voltage on top bar
+    //=========================================================================
+    ui_set_battery_voltage(BAT_analogVolts);
+
+    //=========================================================================
+    // Update Telemetry from CRSF link
+    //=========================================================================
+    if (CRSFLink.isReady()) {
+        CRSFLink.updateUI();
+    }
 }
 
 // Call these from your encoder ISR or polling routine

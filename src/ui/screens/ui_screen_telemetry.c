@@ -208,8 +208,8 @@ static void create_log_panel(void) {
 
 static void create_imu9_panel(void) {
     printf("IMU9: Starting panel creation...\r\n");
-    
-    lv_obj_t *panel = create_panel_base("9-DOF IMU");
+
+    lv_obj_t *panel = create_panel_base("Remote IMU");
     if (!panel) {
         printf("IMU9: ERROR - panel creation failed!\r\n");
         return;
@@ -217,28 +217,26 @@ static void create_imu9_panel(void) {
     panels[num_panels++] = panel;
     imu9_panel = panel;
     printf("IMU9: Base panel created, num_panels=%d\r\n", num_panels);
-    
-    // Simple test: just 3 static labels
+
     lv_obj_t *lbl1 = lv_label_create(panel);
-    lv_label_set_text(lbl1, "Accel: 0.00, 0.00, 0.00");
+    lv_label_set_text(lbl1, "Euler: ---, ---, ---");
     lv_obj_add_style(lbl1, &style_text_primary, 0);
     lv_obj_set_pos(lbl1, 5, 20);
-    
+
     lv_obj_t *lbl2 = lv_label_create(panel);
-    lv_label_set_text(lbl2, "Gyro:  0.00, 0.00, 0.00");
+    lv_label_set_text(lbl2, "Cal:   ---, ---, ---");
     lv_obj_add_style(lbl2, &style_text_primary, 0);
     lv_obj_set_pos(lbl2, 5, 40);
-    
+
     lv_obj_t *lbl3 = lv_label_create(panel);
-    lv_label_set_text(lbl3, "Mag:   0.00, 0.00, 0.00");
+    lv_label_set_text(lbl3, "Link:  ---, ---, ---");
     lv_obj_add_style(lbl3, &style_text_primary, 0);
     lv_obj_set_pos(lbl3, 5, 60);
-    
-    // Store references for updates
+
     imu9_accel_label = lbl1;
     imu9_gyro_label = lbl2;
     imu9_mag_label = lbl3;
-    
+
     printf("IMU9: Panel created successfully\r\n");
 }
 
@@ -356,15 +354,10 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
         create_page_indicator();
     }
     
-    // Show/hide IMU9 panel based on profile
+    // IMU panel is always visible (shows remote BNO055 data via CRSF telemetry)
     if (imu9_panel) {
-        if (profile == ROBOT_PROFILE_HEXAPOD) {
-            lv_obj_remove_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
-            printf("Telemetry: IMU9 panel shown\r\n");
-        } else {
-            lv_obj_add_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
-            printf("Telemetry: IMU9 panel hidden\r\n");
-        }
+        lv_obj_remove_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
+        printf("Telemetry: IMU panel shown (remote BNO055)\r\n");
     }
     
     printf("Telemetry: Configured for %s profile\r\n", 
@@ -438,24 +431,29 @@ void ui_telemetry_add_log(const char *message) {
     lv_textarea_set_cursor_pos(log_textarea, LV_TEXTAREA_CURSOR_LAST);
 }
 
-void ui_telemetry_update_imu9(float ax, float ay, float az, 
+void ui_telemetry_update_imu9(float ax, float ay, float az,
                               float gx, float gy, float gz,
                               float mx, float my, float mz) {
     char buf[48];
-    
-    // Update the simplified 3-label display
+
+    // Row 1: BNO055 Euler angles (pitch, roll, yaw)
     if (imu9_accel_label) {
-        snprintf(buf, sizeof(buf), "Accel: %.2f, %.2f, %.2f", (double)ax, (double)ay, (double)az);
+        snprintf(buf, sizeof(buf), "Euler: P%.1f R%.1f Y%.1f",
+                 (double)ax, (double)ay, (double)az);
         lv_label_set_text(imu9_accel_label, buf);
     }
-    
+
+    // Row 2: BNO055 calibration (sys, gyro, accel)
     if (imu9_gyro_label) {
-        snprintf(buf, sizeof(buf), "Gyro:  %.2f, %.2f, %.2f", (double)gx, (double)gy, (double)gz);
+        snprintf(buf, sizeof(buf), "Cal:   S%.0f G%.0f A%.0f",
+                 (double)gx, (double)gy, (double)gz);
         lv_label_set_text(imu9_gyro_label, buf);
     }
-    
+
+    // Row 3: Link info (voltage, LQ%, SNR)
     if (imu9_mag_label) {
-        snprintf(buf, sizeof(buf), "Mag:   %.2f, %.2f, %.2f", (double)mx, (double)my, (double)mz);
+        snprintf(buf, sizeof(buf), "Link:  %.1fV LQ%.0f%% SNR%.0f",
+                 (double)mx, (double)my, (double)mz);
         lv_label_set_text(imu9_mag_label, buf);
     }
 }

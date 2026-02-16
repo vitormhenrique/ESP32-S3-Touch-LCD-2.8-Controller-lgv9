@@ -46,8 +46,7 @@ void InputManager::update() {
     // Update analog inputs
     AnalogInput.update();
     
-    // Process encoder interrupts (also done in LVGL loop, but good to do here too)
-    EncoderInput.processInterrupt();
+    // Encoder polling handled by dedicated EncoderTask
 }
 
 bool InputManager::isReady() {

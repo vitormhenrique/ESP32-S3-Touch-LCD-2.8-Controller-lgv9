@@ -63,7 +63,7 @@ void ui_create_header(lv_obj_t *parent)
     lv_obj_align(ui_BatteryIcon, LV_ALIGN_RIGHT_MID, -34, 0);
     
     ui_BatteryLabel = lv_label_create(ui_HeaderPanel);
-    lv_label_set_text(ui_BatteryLabel, "100%");
+    lv_label_set_text(ui_BatteryLabel, "--V");
     lv_obj_add_style(ui_BatteryLabel, &style_text_secondary, 0);
     lv_obj_set_style_text_font(ui_BatteryLabel, &lv_font_montserrat_10, 0);
     lv_obj_align(ui_BatteryLabel, LV_ALIGN_RIGHT_MID, -2, 0);
@@ -131,38 +131,34 @@ void ui_update_nav_buttons(int active_screen_index)
     }
 }
 
-void ui_set_battery(uint8_t percent, int state)
+void ui_set_battery_voltage(float voltage)
 {
     if (!ui_BatteryLabel || !ui_BatteryIcon) return;
-    
+
     char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", percent);
+    snprintf(buf, sizeof(buf), "%.1fV", voltage);
     lv_label_set_text(ui_BatteryLabel, buf);
-    
+
     const char *icon;
     lv_color_t color;
-    
-    // 0=Unknown, 1=Discharging, 2=Charging, 3=Full
-    if (state == 2) { // CHARGING
-        icon = ICON_CHARGE;
-        color = lv_color_hex(UI_COLOR_ACCENT_CYAN);
-    } else if (percent > 80) {
+
+    if (voltage > 3.9f) {
         icon = ICON_BATTERY_FULL;
         color = lv_color_hex(UI_COLOR_ACCENT_GREEN);
-    } else if (percent > 60) {
+    } else if (voltage > 3.7f) {
         icon = ICON_BATTERY_3;
         color = lv_color_hex(UI_COLOR_ACCENT_GREEN);
-    } else if (percent > 40) {
+    } else if (voltage > 3.5f) {
         icon = ICON_BATTERY_2;
         color = lv_color_hex(UI_COLOR_ACCENT_ORANGE);
-    } else if (percent > 20) {
+    } else if (voltage > 3.3f) {
         icon = ICON_BATTERY_1;
         color = lv_color_hex(UI_COLOR_ACCENT_ORANGE);
     } else {
         icon = ICON_BATTERY_EMPTY;
         color = lv_color_hex(UI_COLOR_ACCENT_RED);
     }
-    
+
     lv_label_set_text(ui_BatteryIcon, icon);
     lv_obj_set_style_text_color(ui_BatteryIcon, color, 0);
     lv_obj_set_style_text_color(ui_BatteryLabel, color, 0);

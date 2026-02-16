@@ -179,10 +179,10 @@ typedef struct {
 // Gimbal axes configuration
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 #define GIMBAL_CONFIGS { \
-    { "LEFT_Y",   0, 0,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 0 */ \
     { "LEFT_X",   0, 1,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 1 */ \
-    { "RIGHT_Y",  1, 0,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 0 */ \
+    { "LEFT_Y",   0, 0,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 0 */ \
     { "RIGHT_X",  1, 1,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 1 */ \
+    { "RIGHT_Y",  1, 0,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 0 */ \
 }
 
 // Potentiometer configurations  
@@ -206,4 +206,11 @@ typedef struct {
 
 #define DEBOUNCE_MS                20   // Switch debounce time in milliseconds
 #define ANALOG_FILTER_SAMPLES       4   // Number of samples for moving average
+
+//=============================================================================
+// CRSF UART Pin Assignments
+//=============================================================================
+#define CRSF_UART_TX_PIN    43      // ESP32-S3 GPIO for UART TX to ELRS module
+#define CRSF_UART_RX_PIN    44      // ESP32-S3 GPIO for UART RX from ELRS module
+#define CRSF_OE_PIN         18      // SN74LVC1G125 OE control (active-low, pull-up)
 

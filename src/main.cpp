@@ -14,6 +14,7 @@
 #include "ui_custom.h"
 #include "ui_custom_integration.h"
 #include "PerfMonitor.h"
+#include "CRSF_Manager.h"
 
 void DriverTask(void *parameter) {
   Wireless_Test2();
@@ -21,7 +22,10 @@ void DriverTask(void *parameter) {
   
   // Load saved gimbal calibrations from Settings
   ui_load_gimbal_calibrations();
-  
+
+  // Initialize CRSF link (spawns its own FreeRTOS task)
+  CRSF_Init();
+
   while(1){
     Perf_StartSection(PERF_COUNTER_DRIVER_LOOP);
     
