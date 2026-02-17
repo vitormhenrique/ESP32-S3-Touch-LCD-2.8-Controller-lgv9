@@ -11,9 +11,14 @@
 
 #define CRSF_BAUD               420000
 #define CRSF_DEFAULT_RATE_HZ    50
-#define CRSF_BOOTSTRAP_RATE_HZ  10
+#define CRSF_BOOTSTRAP_RATE_HZ  10      // Low-rate bootstrap to minimize echo while waking TX module
 #define CRSF_LINK_TIMEOUT_MS    1000
+#define CRSF_LINK_DIAG_MS       2000    // Diagnostic log interval while waiting for link
+#define CRSF_PING_INTERVAL_MS   1000    // Device ping interval while waiting for link
 #define CRSF_LOG_INTERVAL_MS    30000   // Periodic stats log every 30s
+
+// CRSF frame types not defined in AlfredoCRSF library
+#define CRSF_FRAMETYPE_DEVICE_PING  0x28
 #define CRSF_TASK_STACK_SIZE    4096
 #define CRSF_TASK_PRIORITY      4
 #define CRSF_TASK_CORE          0
@@ -92,6 +97,14 @@ private:
     CRSFTelemetry_t _telemetry;
     SemaphoreHandle_t _telemetryMutex;
 
+    // Bootstrap / link detection
+    uint32_t _bootstrapIntervalUs;
+    uint32_t _lastBootstrapUs;
+    uint32_t _lastDiagMs;
+    uint32_t _lastModulePacketMs;    // Last genuine packet from TX module (not echo)
+    uint32_t _lastPingMs;
+    bool     _linkOk;
+
     // Log state tracking
     bool     _prevLinkUp;
     bool     _prevAttitudeValid;
@@ -101,6 +114,8 @@ private:
     // Internal methods
     void gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]);
     void sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNELS]);
+    void sendBootstrapFrame();
+    void sendDevicePing();
     void setOeMode(bool txMode);
     void discardEcho(size_t bytesSent);
     void processTelemetry();

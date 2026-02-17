@@ -17,7 +17,7 @@
 #include "CRSF_Manager.h"
 
 void DriverTask(void *parameter) {
-  Wireless_Test2();
+  // Wireless_Test2();  // Disabled - WiFi/BLE scan not needed for RC
   Input_Init();  // Initialize InputManager
   
   // Load saved gimbal calibrations from Settings
@@ -80,8 +80,8 @@ void loop()
 {
   static bool perf_initialized = false;
   
-  // Initialize perf monitor after BLE test completes (takes ~8 seconds)
-  if (!perf_initialized && millis() > 9000) {
+  // Initialize perf monitor after startup (reduced delay since wireless scan is disabled)
+  if (!perf_initialized && millis() > 2000) {
     Perf_Init();
     perf_initialized = true;
   }

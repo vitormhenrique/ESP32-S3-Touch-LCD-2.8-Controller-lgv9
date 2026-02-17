@@ -21,6 +21,12 @@ CRSF_Manager::CRSF_Manager()
     , _frameRateHz(CRSF_DEFAULT_RATE_HZ)
     , _telemetry{}
     , _telemetryMutex(nullptr)
+    , _bootstrapIntervalUs(1000000 / CRSF_BOOTSTRAP_RATE_HZ)
+    , _lastBootstrapUs(0)
+    , _lastDiagMs(0)
+    , _lastModulePacketMs(0)
+    , _lastPingMs(0)
+    , _linkOk(false)
     , _prevLinkUp(false)
     , _prevAttitudeValid(false)
     , _lastLogMs(0)
@@ -36,6 +42,7 @@ bool CRSF_Manager::begin() {
     printf("[CRSF] Initializing...\n");
     printf("[CRSF] TX Pin: %d, RX Pin: %d, OE Pin: %d\n",
            CRSF_UART_TX_PIN, CRSF_UART_RX_PIN, CRSF_OE_PIN);
+    printf("[CRSF] Baud: %d, Frame rate: %d Hz\n", CRSF_BAUD, CRSF_DEFAULT_RATE_HZ);
 
     // Configure OE pin for SN74LVC1G125 buffer control
     // Active-low: HIGH = hi-Z (RX mode), LOW = output active (TX mode)
@@ -43,9 +50,11 @@ bool CRSF_Manager::begin() {
     digitalWrite(CRSF_OE_PIN, HIGH);  // Default: RX mode
     // Enable internal pull-up to ensure buffer stays tri-stated during boot/glitches
     gpio_set_pull_mode((gpio_num_t)CRSF_OE_PIN, GPIO_PULLUP_ONLY);
+    printf("[CRSF] OE pin configured: HIGH (RX mode), pull-up enabled\n");
 
     // Initialize UART
     _serial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_UART_RX_PIN, CRSF_UART_TX_PIN);
+    printf("[CRSF] Serial1 initialized\n");
 
     // Initialize CRSF library
     _crsf.begin(_serial);
@@ -60,6 +69,7 @@ bool CRSF_Manager::begin() {
     _initialized = true;
     printf("[CRSF] Initialized at %d baud, %d Hz frame rate\n",
            CRSF_BAUD, _frameRateHz);
+    printf("[CRSF] Half-duplex mode with SN74LVC1G125 buffer\n");
 
     return true;
 }
@@ -77,7 +87,7 @@ void CRSF_Manager::taskFunc(void* param) {
 
     while (true) {
         self->update();
-        vTaskDelay(pdMS_TO_TICKS(20)); // 50Hz
+        vTaskDelay(pdMS_TO_TICKS(4)); // ~250Hz polling for responsive serial RX; frame rate is gated internally
     }
 }
 
@@ -89,15 +99,21 @@ void CRSF_Manager::update() {
     if (!_initialized) return;
 
     uint32_t nowUs = micros();
+    uint32_t nowMs = millis();
 
-    // Process incoming telemetry from ELRS TX module
+    // Always process incoming first (helps link detection)
     processTelemetry();
 
-    // Send RC channels at configured rate
-    if ((nowUs - _lastFrameUs) >= _frameIntervalUs) {
-        _lastFrameUs = nowUs;
+    // Detect link using echo-aware tracking: only genuine module packets
+    // (not our own echoed RC frames) prove the radio is actually responding
+    _linkOk = (_lastModulePacketMs != 0) &&
+              ((nowMs - _lastModulePacketMs) < CRSF_LINK_TIMEOUT_MS);
 
-        if (RCInput.isReady()) {
+    if (_linkOk && RCInput.isReady()) {
+        // Normal operation: send real RC data at full rate
+        if ((nowUs - _lastFrameUs) >= _frameIntervalUs) {
+            _lastFrameUs = nowUs;
+
             uint16_t channels[CPACK_NUM_CHANNELS];
             gatherAndPackChannels(channels);
             sendRcChannelsPacked(channels);
@@ -105,6 +121,52 @@ void CRSF_Manager::update() {
             if (xSemaphoreTake(_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
                 _telemetry.frames_sent++;
                 xSemaphoreGive(_telemetryMutex);
+            }
+        }
+    } else {
+        // Send device pings to provoke responses from newly-powered radio module
+        if ((nowMs - _lastPingMs) >= CRSF_PING_INTERVAL_MS) {
+            _lastPingMs = nowMs;
+            sendDevicePing();
+        }
+
+        // Bootstrap: send center-value RC frames at low rate to wake up TX module.
+        // ELRS TX modules will NOT transmit RF or bind unless they receive valid
+        // CRSF RC frames from the handset. Without this, we deadlock:
+        //   no RC frames → TX module silent → no binding → no link → no RC frames
+        if ((nowUs - _lastBootstrapUs) >= _bootstrapIntervalUs) {
+            _lastBootstrapUs = nowUs;
+            sendBootstrapFrame();
+
+            if (xSemaphoreTake(_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+                _telemetry.frames_sent++;
+                xSemaphoreGive(_telemetryMutex);
+            }
+        }
+
+        // Diagnostic logging while waiting for link
+        if ((nowMs - _lastDiagMs) >= CRSF_LINK_DIAG_MS) {
+            _lastDiagMs = nowMs;
+            
+            // Get frames sent for diagnostic
+            uint32_t framesSent = 0;
+            if (xSemaphoreTake(_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+                framesSent = _telemetry.frames_sent;
+                xSemaphoreGive(_telemetryMutex);
+            }
+            
+            if (_crsf.bytesRead() == 0) {
+                printf("[CRSF] No UART bytes from TX module. Sent %lu bootstrap frames. Check wiring/power.\n",
+                       (unsigned long)framesSent);
+            } else if (_crsf.goodPackets() == 0) {
+                printf("[CRSF] UART activity but no valid CRSF packets (bad=%lu, sent=%lu). Check baud/wiring.\n",
+                       (unsigned long)_crsf.badPackets(), (unsigned long)framesSent);
+            } else {
+                printf("[CRSF] Bootstrap: waiting for link (good=%lu, bad=%lu, sent=%lu, inputs_ready=%d)\n",
+                       (unsigned long)_crsf.goodPackets(),
+                       (unsigned long)_crsf.badPackets(),
+                       (unsigned long)framesSent,
+                       RCInput.isReady());
             }
         }
     }
@@ -159,8 +221,25 @@ void CRSF_Manager::gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]) 
 }
 
 //=============================================================================
+// Debug helpers
+//=============================================================================
+
+static void printHexFrame(const char* label, const uint8_t* data, size_t len) {
+    printf("%s HEX [%d]: ", label, (int)len);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02X ", data[i]);
+    }
+    printf("\n");
+}
+
+//=============================================================================
 // CRSF frame building & sending (half-duplex)
 //=============================================================================
+
+// Debug: Print first frame and then periodically
+static uint32_t _lastFrameDebugMs = 0;
+static uint32_t _frameDebugCount = 0;
+#define FRAME_DEBUG_INTERVAL_MS 5000  // Print frame every 5 seconds
 
 void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNELS]) {
     // Bit-pack 16 x 11-bit channels into 22-byte payload (LSB-first)
@@ -198,16 +277,83 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
 
     size_t frameLen = 26;
 
+    // Debug: Print frame periodically
+    uint32_t nowMs = millis();
+    bool printDebug = (_frameDebugCount == 0) || 
+                      (nowMs - _lastFrameDebugMs >= FRAME_DEBUG_INTERVAL_MS);
+    
+    if (printDebug) {
+        _lastFrameDebugMs = nowMs;
+        printf("[CRSF] --- Frame #%lu ---\n", (unsigned long)_frameDebugCount);
+        printf("[CRSF] Channels: ");
+        for (int i = 0; i < 8; i++) {
+            printf("%d ", channels[i]);
+        }
+        printf("...\n");
+        printHexFrame("[CRSF]", frame, frameLen);
+    }
+
     // Half-duplex with hardware buffer (SN74LVC1G125DCKR):
     // When using a tri-state buffer, we DON'T get echo - the buffer isolates TX from RX.
     // So no need to discard echo like in one-wire mode.
     setOeMode(true);           // OE LOW = buffer enabled, TX drives line
     delayMicroseconds(2);      // Let OE settle
 
-    _serial.write(frame, frameLen);
-    _serial.flush();           // Wait for TX complete
+    size_t written = _serial.write(frame, frameLen);
+    _serial.flush();           // Wait for TX FIFO to empty
+    
+    // ESP32-S3 UART: flush() returns when FIFO is empty, but shift register may still be sending.
+    // At 420000 baud, 26 bytes = 26 * 10 bits = 260 bits / 420000 = ~619us
+    // Add margin for the last byte to finish shifting out.
+    delayMicroseconds(30);     // Allow last byte to shift out
 
     setOeMode(false);          // OE HIGH = buffer tri-state, RX can receive
+    
+    _frameDebugCount++;
+    
+    // Debug: Log write result
+    if (printDebug) {
+        printf("[CRSF] write() returned %d/%d bytes\n", (int)written, (int)frameLen);
+        printf("[CRSF] UART RX bytes: %lu, good: %lu, bad: %lu\n",
+               (unsigned long)_crsf.bytesRead(),
+               (unsigned long)_crsf.goodPackets(),
+               (unsigned long)_crsf.badPackets());
+    }
+    
+    // Warning if write failed
+    if (written != frameLen) {
+        printf("[CRSF] WARNING: write() returned %d, expected %d\n", (int)written, (int)frameLen);
+    }
+}
+
+void CRSF_Manager::sendBootstrapFrame() {
+    // Send center-value channels to bootstrap the TX module into transmitting.
+    // This is required for ELRS modules that stay silent until they see RC frames.
+    uint16_t channels[CPACK_NUM_CHANNELS];
+    for (int i = 0; i < CPACK_NUM_CHANNELS; i++) {
+        channels[i] = CPACK_CRSF_MID;  // 992 = 1500us center
+    }
+    sendRcChannelsPacked(channels);
+}
+
+void CRSF_Manager::sendDevicePing() {
+    // Broadcast device ping to provoke a device info (0x29) response from TX module.
+    // This helps detect when a freshly-powered radio module comes online.
+    // Frame: [addr=0x00][len=4][type=0x28][dest=0x00][origin=0xEA][crc]
+    uint8_t frame[6];
+    frame[0] = CRSF_ADDRESS_BROADCAST;
+    frame[1] = 4;
+    frame[2] = CRSF_FRAMETYPE_DEVICE_PING;
+    frame[3] = CRSF_ADDRESS_BROADCAST;
+    frame[4] = CRSF_ADDRESS_RADIO_TRANSMITTER;
+    frame[5] = _crc.calc(&frame[2], 3);
+
+    setOeMode(true);
+    delayMicroseconds(2);
+    _serial.write(frame, 6);
+    _serial.flush();
+    delayMicroseconds(30);
+    setOeMode(false);
 }
 
 void CRSF_Manager::setOeMode(bool txMode) {
@@ -237,14 +383,26 @@ void CRSF_Manager::discardEcho(size_t bytesSent) {
 //=============================================================================
 
 void CRSF_Manager::processTelemetry() {
+    // Track good packets before/after to detect genuine module responses vs echo
+    uint32_t prevGood = _crsf.goodPackets();
     _crsf.update();
+
+    // Echo-aware link detection: on the half-duplex bus, our own RC frames (0x16)
+    // and pings (0x28) echo back and get parsed as valid packets. Only count
+    // frame types that the TX module actually sends (link stats, telemetry, etc.)
+    if (_crsf.goodPackets() > prevGood) {
+        uint8_t lastType = _crsf.lastValidPacketType();
+        if (lastType != CRSF_FRAMETYPE_RC_CHANNELS_PACKED &&
+            lastType != CRSF_FRAMETYPE_DEVICE_PING) {
+            _lastModulePacketMs = millis();
+        }
+    }
 
     if (xSemaphoreTake(_telemetryMutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
 
-    // Link state
-    bool linkUp = _crsf.isLinkUp();
-    _telemetry.link_up = linkUp;
-    if (linkUp && !_prevLinkUp) {
+    // Link state (echo-aware: _linkOk filters out self-echoed frames)
+    _telemetry.link_up = _linkOk;
+    if (_linkOk && !_prevLinkUp) {
         _telemetry.link_up_since_ms = millis();
     }
 
@@ -297,10 +455,10 @@ void CRSF_Manager::generateLogs() {
     // Link up/down transitions
     if (t.link_up && !_prevLinkUp) {
         ui_telemetry_add_log("CRSF: Link UP");
-        printf("[CRSF] Link UP\n");
+        printf("[CRSF] Link UP (connected to TX module)\n");
     } else if (!t.link_up && _prevLinkUp) {
-        ui_telemetry_add_log("CRSF: Link DOWN");
-        printf("[CRSF] Link DOWN\n");
+        ui_telemetry_add_log("CRSF: Link DOWN - reconnecting");
+        printf("[CRSF] Link DOWN - sending bootstrap frames to reconnect...\n");
     }
     _prevLinkUp = t.link_up;
 
