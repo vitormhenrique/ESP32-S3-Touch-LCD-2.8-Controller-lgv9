@@ -28,6 +28,51 @@
 #define ADS1X15_ADDR_3      0x4A    // Additional analog inputs (spare)
 
 //=============================================================================
+// Device Index Constants (for use in pin config tables)
+//=============================================================================
+
+// MCP23017 expander indices (by I2C address)
+#define MCP_23017_20        0       // MCP23017 at 0x20 (first expander)
+#define MCP_23017_21        1       // MCP23017 at 0x21 (second expander)
+
+// ADS1115 ADC indices (by I2C address)
+#define ADS_115_48          0       // ADS1115 at 0x48 (gimbals)
+#define ADS_115_49          1       // ADS1115 at 0x49 (gimbals + pots)
+#define ADS_115_4A          2       // ADS1115 at 0x4A (spare)
+
+//=============================================================================
+// MCP23017 Pin Name Constants
+// Port A: GPA0-GPA7 = pins 0-7   (named A0-A7)
+// Port B: GPB0-GPB7 = pins 8-15  (named B0-B7)
+//=============================================================================
+
+#define MCP_A0              0
+#define MCP_A1              1
+#define MCP_A2              2
+#define MCP_A3              3
+#define MCP_A4              4
+#define MCP_A5              5
+#define MCP_A6              6
+#define MCP_A7              7
+#define MCP_B0              8
+#define MCP_B1              9
+#define MCP_B2              10
+#define MCP_B3              11
+#define MCP_B4              12
+#define MCP_B5              13
+#define MCP_B6              14
+#define MCP_B7              15
+
+//=============================================================================
+// ADS1115 Channel Name Constants (named A0-A3)
+//=============================================================================
+
+#define ADS_A0              0
+#define ADS_A1              1
+#define ADS_A2              2
+#define ADS_A3              3
+
+//=============================================================================
 // Enums
 //=============================================================================
 
@@ -111,8 +156,8 @@ typedef struct {
 //=============================================================================
 
 // Number of each input type
-#define NUM_SWITCHES        25      // 11 original + 10 Nav switches (2x5) + 4 Encoder pins
-#define NUM_3POS_TOGGLES    2       // Two 3-position toggle switches
+#define NUM_SWITCHES        24      // 6 2-pos SW + 4 BTN + 10 Nav switches (2x5) + 4 Encoder pins
+#define NUM_3POS_TOGGLES    2       // Two 3-position toggle switches (SW_E, SW_F)
 #define NUM_GIMBAL_AXES     4       // 2 gimbals x 2 axes each
 #define NUM_POTENTIOMETERS  2       // 2 potentiometers
 
@@ -121,76 +166,71 @@ typedef struct {
 
 //=============================================================================
 // Switch Pin Assignments (MCP23017)
-// Expander 0: pins 0-15 (GPA0-7 = 0-7, GPB0-7 = 8-15)
-// Expander 1: pins 0-15 (GPA0-7 = 0-7, GPB0-7 = 8-15)
+// Use MCP_23017_20 / MCP_23017_21 for expander and MCP_A0..MCP_B7 for pins
 //=============================================================================
 
-// Standard 2-position switches configuration
+// Standard 2-position switches + buttons + nav + encoders
 // Format: { "NAME", expander, pin, type, inverted }
 #define SWITCH_CONFIGS { \
-    /* Switches assigned to Expander 0 Port B (Pins 8-15) */ \
-    { "SW_A",    0,  8, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_B",    0,  9, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_C",    0, 10, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_D",    0, 11, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_E",    0, 12, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_F",    0, 13, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_G",    0, 14, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    { "SW_H",    0, 15, SWITCH_TYPE_TOGGLE_2POS, true }, \
-    /* Buttons */ \
-    { "BTN_1",   1, 15, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B7 */ \
-    { "BTN_3",   1,  4, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 A4 */ \
-    { "BTN_4",   1,  5, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 A5 */ \
-    /* Nav Switch 1 (Left) - Expander 1 Port B */ \
-    { "NAV1_U",  1, 12, SWITCH_TYPE_MOMENTARY,   true }, /* B4 */ \
-    { "NAV1_D",  1, 14, SWITCH_TYPE_MOMENTARY,   true }, /* B6 */ \
-    { "NAV1_L",  1, 13, SWITCH_TYPE_MOMENTARY,   true }, /* B5 */ \
-    { "NAV1_R",  1, 11, SWITCH_TYPE_MOMENTARY,   true }, /* B3 */ \
-    { "NAV1_C",  1,  8, SWITCH_TYPE_MOMENTARY,   true }, /* B0 */ \
-    /* Nav Switch 2 (Right) - Expander 0 Port A */ \
-    { "NAV2_U",  0,  4, SWITCH_TYPE_MOMENTARY,   true }, /* A4 */ \
-    { "NAV2_D",  0,  6, SWITCH_TYPE_MOMENTARY,   true }, /* A6 */ \
-    { "NAV2_L",  0,  5, SWITCH_TYPE_MOMENTARY,   true }, /* A5 */ \
-    { "NAV2_R",  0,  3, SWITCH_TYPE_MOMENTARY,   true }, /* A3 */ \
-    { "NAV2_C",  0,  0, SWITCH_TYPE_MOMENTARY,   true }, /* A0 */ \
-    /* Encoders (Treated as switches for raw input) */ \
-    { "ENC1_A",  1,  9, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B1 */ \
-    { "ENC1_B",  1, 10, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 1 B2 */ \
-    { "ENC2_A",  0,  1, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 0 A1 */ \
-    { "ENC2_B",  0,  2, SWITCH_TYPE_MOMENTARY,   true }, /* Exp 0 A2 */ \
+    /* 6 two-position toggle switches (indices 0-5) */ \
+    { "SW_A",    MCP_23017_21, MCP_A5, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_B",    MCP_23017_20, MCP_B2, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_C",    MCP_23017_21, MCP_A0, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_D",    MCP_23017_21, MCP_A3, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_G",    MCP_23017_21, MCP_A4, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    { "SW_H",    MCP_23017_20, MCP_B3, SWITCH_TYPE_TOGGLE_2POS, true }, \
+    /* 4 Buttons (indices 6-9) */ \
+    { "BTN_1",   MCP_23017_21, MCP_B7, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "BTN_2",   MCP_23017_20, MCP_A7, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "BTN_3",   MCP_23017_21, MCP_A1, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "BTN_4",   MCP_23017_21, MCP_A2, SWITCH_TYPE_MOMENTARY,   true }, \
+    /* Nav Switch 1 (Left) - Expander 1 Port B (indices 10-14) */ \
+    { "NAV1_U",  MCP_23017_21, MCP_B4, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_D",  MCP_23017_21, MCP_B6, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_L",  MCP_23017_21, MCP_B5, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_R",  MCP_23017_21, MCP_B3, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV1_C",  MCP_23017_21, MCP_B0, SWITCH_TYPE_MOMENTARY,   true }, \
+    /* Nav Switch 2 (Right) - Expander 0 Port A (indices 15-19) */ \
+    { "NAV2_U",  MCP_23017_20, MCP_A4, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_D",  MCP_23017_20, MCP_A6, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_L",  MCP_23017_20, MCP_A5, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_R",  MCP_23017_20, MCP_A3, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "NAV2_C",  MCP_23017_20, MCP_A0, SWITCH_TYPE_MOMENTARY,   true }, \
+    /* Encoders (indices 20-23) */ \
+    { "ENC1_A",  MCP_23017_21, MCP_B1, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "ENC1_B",  MCP_23017_21, MCP_B2, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "ENC2_A",  MCP_23017_20, MCP_A1, SWITCH_TYPE_MOMENTARY,   true }, \
+    { "ENC2_B",  MCP_23017_20, MCP_A2, SWITCH_TYPE_MOMENTARY,   true }, \
 }
 
-// 3-position toggle switches configuration
+// 3-position toggle switches configuration (SW_E and SW_F)
 // Format: { "NAME", expander, pin_up, pin_down, inverted }
 // CENTER is detected when neither UP nor DOWN pin is active
-// Assigned to Expander 1 Port A 0-3
 #define TOGGLE_3POS_CONFIGS { \
-    { "SW_3POS_1", 1, 0, 1, true }, \
-    { "SW_3POS_2", 1, 2, 3, true }, \
+    { "SW_E", MCP_23017_21, MCP_A6, MCP_A7, true }, \
+    { "SW_F", MCP_23017_20, MCP_B1, MCP_B0, true }, \
 }
 
 //=============================================================================
 // Analog Input Assignments (ADS1X15)
-// ADC 0: channels 0-3
-// ADC 1: channels 0-3
-// ADC 2: channels 0-3
+// Use ADS_115_48 / ADS_115_49 for device and ADS_A0..ADS_A3 for channel
 //=============================================================================
 
 // Gimbal axes configuration
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 #define GIMBAL_CONFIGS { \
-    { "LEFT_X",   0, 1,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 1 */ \
-    { "LEFT_Y",   0, 0,  0, 32767, 16383, 200, false }, /* ADC 0 (0x48) Ch 0 */ \
-    { "RIGHT_X",  1, 1,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 1 */ \
-    { "RIGHT_Y",  1, 0,  0, 32767, 16383, 200, false }, /* ADC 1 (0x49) Ch 0 */ \
+    { "LEFT_X",   ADS_115_48, ADS_A1,  0, 32767, 16383, 200, false }, \
+    { "LEFT_Y",   ADS_115_48, ADS_A0,  0, 32767, 16383, 200, false }, \
+    { "RIGHT_X",  ADS_115_49, ADS_A1,  0, 32767, 16383, 200, false }, \
+    { "RIGHT_Y",  ADS_115_49, ADS_A0,  0, 32767, 16383, 200, false }, \
 }
 
 // Potentiometer configurations  
 // Format: { "NAME", adc, channel, min_raw, max_raw, center_raw, deadzone, inverted }
 // Note: center_raw and deadzone are ignored for pots (no center position)
 #define POT_CONFIGS { \
-    { "POT_1",    1, 2,  0, 32767, 0, 0, false }, /* ADC 1 (0x49) Ch 2 */ \
-    { "POT_2",    1, 3,  0, 32767, 0, 0, false }, /* ADC 1 (0x49) Ch 3 */ \
+    { "POT_1",    ADS_115_49, ADS_A3,  0, 32767, 0, 0, false }, \
+    { "POT_2",    ADS_115_49, ADS_A2,  0, 32767, 0, 0, false }, \
 }
 
 //=============================================================================

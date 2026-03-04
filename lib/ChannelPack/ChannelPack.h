@@ -49,8 +49,8 @@ typedef struct {
     int16_t gimbal[4];      // -1000 to +1000 (LX, LY, RX, RY)
     int16_t pot[2];         // 0 to 1000
     int32_t encoder[2];     // raw encoder position
-    bool    switches[8];    // SW_A through SW_H
-    bool    buttons[3];     // BTN_1, BTN_3, BTN_4
+    bool    switches[8];    // SW_A,B,C,D,G,H (bits 0-5), bits 6-7 reserved
+    bool    buttons[4];     // BTN_1, BTN_2, BTN_3, BTN_4
     uint8_t toggles[2];    // 3-pos: 0=UP, 1=CENTER, 2=DOWN
     bool    nav[2][5];      // nav[switch_idx][U/D/L/R/C]
 } ChannelPackInputs_t;
@@ -93,17 +93,17 @@ inline uint16_t packSwitches(const bool sw[8]) {
     return val;
 }
 
-// Pack 3 buttons + 2 three-pos toggles into 11-bit value
-// Bits 0-2: BTN_1, BTN_3, BTN_4
-// Bits 3-4: TOGGLE_3POS_1 (0-2)
-// Bits 5-6: TOGGLE_3POS_2 (0-2)
-inline uint16_t packButtonsToggles(const bool btn[3], const uint8_t tog[2]) {
+// Pack 4 buttons + 2 three-pos toggles into 11-bit value
+// Bits 0-3: BTN_1, BTN_2, BTN_3, BTN_4
+// Bits 4-5: SW_E 3-pos (0-2)
+// Bits 6-7: SW_F 3-pos (0-2)
+inline uint16_t packButtonsToggles(const bool btn[4], const uint8_t tog[2]) {
     uint16_t val = 0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         if (btn[i]) val |= (1 << i);
     }
-    val |= ((uint16_t)(tog[0] & 0x03)) << 3;
-    val |= ((uint16_t)(tog[1] & 0x03)) << 5;
+    val |= ((uint16_t)(tog[0] & 0x03)) << 4;
+    val |= ((uint16_t)(tog[1] & 0x03)) << 6;
     return val;
 }
 
@@ -159,12 +159,12 @@ inline void unpackSwitches(uint16_t val, bool sw[8]) {
     }
 }
 
-inline void unpackButtonsToggles(uint16_t val, bool btn[3], uint8_t tog[2]) {
-    for (int i = 0; i < 3; i++) {
+inline void unpackButtonsToggles(uint16_t val, bool btn[4], uint8_t tog[2]) {
+    for (int i = 0; i < 4; i++) {
         btn[i] = (val >> i) & 1;
     }
-    tog[0] = (val >> 3) & 0x03;
-    tog[1] = (val >> 5) & 0x03;
+    tog[0] = (val >> 4) & 0x03;
+    tog[1] = (val >> 6) & 0x03;
 }
 
 inline void unpackNavSwitches(uint16_t val, bool nav[2][5]) {

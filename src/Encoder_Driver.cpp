@@ -106,7 +106,7 @@ bool Encoder_Driver::begin() {
         this,
         ENCODER_TASK_PRIORITY,
         &_encoderTaskHandle,
-        1  // Run on Core 1
+        0  // Run on Core 0 (same core as I2C drivers)
     );
 
     if (result != pdPASS) {
@@ -135,9 +135,9 @@ uint8_t Encoder_Driver::readEncoderPins(uint8_t index) {
 
     EncoderConfig_t* cfg = &_configs[index];
 
-    // Read pins from MCP23017 via the SwitchInput driver
-    bool pin_a = SwitchInput.readPin(cfg->expander, cfg->pin_a);
-    bool pin_b = SwitchInput.readPin(cfg->expander, cfg->pin_b);
+    // Read pins from cached GPIO (updated by MCP23017 bulk read - no I2C here)
+    bool pin_a = SwitchInput.getCachedPin(cfg->expander, cfg->pin_a);
+    bool pin_b = SwitchInput.getCachedPin(cfg->expander, cfg->pin_b);
 
     // Combine into 2-bit state (AB)
     uint8_t state = (pin_a ? 0x02 : 0x00) | (pin_b ? 0x01 : 0x00);

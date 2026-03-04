@@ -43,40 +43,39 @@ void ui_update_from_inputs(void)
     
     //=========================================================================
     // Update 2-Position Switches
-    // Adjust the indices based on your InputConfig.h SWITCH_CONFIGS
+    // Indices 0-5: SW_A, SW_B, SW_C, SW_D, SW_G, SW_H
     //=========================================================================
-    // Assuming switches 0-5 are your 2-position switches
     for (uint8_t i = 0; i < 6; i++) {
         ui_set_switch(i, RCInput.isSwitchOn(i));
     }
     
     //=========================================================================
     // Update Buttons (momentary switches)
-    // BTN_1=idx 8, BTN_3=idx 9, BTN_4=idx 10 (BTN_2 removed)
+    // BTN_1=idx 6, BTN_2=idx 7, BTN_3=idx 8, BTN_4=idx 9
     //=========================================================================
-    for (uint8_t i = 0; i < 3; i++) {
-        ui_set_button(i, RCInput.isSwitchOn(8 + i));
+    for (uint8_t i = 0; i < 4; i++) {
+        ui_set_button(i, RCInput.isSwitchOn(6 + i));
     }
     
     //=========================================================================
     // Update Nav Switches
-    // Nav 1: Indices 11-15 (U, D, L, R, C)
-    // Nav 2: Indices 16-20 (U, D, L, R, C)
+    // Nav 1: Indices 10-14 (U, D, L, R, C)
+    // Nav 2: Indices 15-19 (U, D, L, R, C)
     //=========================================================================
     ui_set_nav_switch(0,
-        RCInput.isSwitchOn(11), // Up
-        RCInput.isSwitchOn(12), // Down
-        RCInput.isSwitchOn(13), // Left
-        RCInput.isSwitchOn(14), // Right
-        RCInput.isSwitchOn(15)  // Center
+        RCInput.isSwitchOn(10), // Up
+        RCInput.isSwitchOn(11), // Down
+        RCInput.isSwitchOn(12), // Left
+        RCInput.isSwitchOn(13), // Right
+        RCInput.isSwitchOn(14)  // Center
     );
 
     ui_set_nav_switch(1,
-        RCInput.isSwitchOn(16), // Up
-        RCInput.isSwitchOn(17), // Down
-        RCInput.isSwitchOn(18), // Left
-        RCInput.isSwitchOn(19), // Right
-        RCInput.isSwitchOn(20)  // Center
+        RCInput.isSwitchOn(15), // Up
+        RCInput.isSwitchOn(16), // Down
+        RCInput.isSwitchOn(17), // Left
+        RCInput.isSwitchOn(18), // Right
+        RCInput.isSwitchOn(19)  // Center
     );
     
     //=========================================================================

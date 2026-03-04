@@ -39,14 +39,14 @@ void DriverTask(void *parameter) {
     QMI8658_Loop(); 
     
     Perf_EndSection(PERF_COUNTER_DRIVER_LOOP);
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(20));  // 50Hz polling for responsive inputs
   }
 }
 void Driver_Loop() {
   xTaskCreatePinnedToCore(
     DriverTask,           
     "DriverTask",         
-    4096,                 
+    8192,                 // Increased stack for I2C + mutex overhead
     NULL,                 
     3,                    
     NULL,                 

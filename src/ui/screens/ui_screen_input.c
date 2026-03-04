@@ -16,8 +16,8 @@ lv_obj_t *ui_NavSwitchIndicators[2][5] = {{NULL}};
 lv_obj_t *ui_InputControlsPanel = NULL;
 lv_obj_t *ui_InputPage1 = NULL;
 lv_obj_t *ui_InputPage2 = NULL;
-lv_obj_t *ui_Buttons[3] = {NULL};
-lv_obj_t *ui_BtnLabels[3] = {NULL};
+lv_obj_t *ui_Buttons[4] = {NULL};
+lv_obj_t *ui_BtnLabels[4] = {NULL};
 lv_obj_t *ui_Switches[6] = {NULL};
 lv_obj_t *ui_SwitchLabels[6] = {NULL};
 lv_obj_t *ui_Toggle3Panels[2] = {NULL};
@@ -68,9 +68,9 @@ static void create_page1_content(lv_obj_t *page)
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
-    // 3 Buttons
-    const char *btn_names[] = {"B1", "B3", "B4"};
-    for (int i = 0; i < 3; i++) {
+    // 4 Buttons
+    const char *btn_names[] = {"B1", "B2", "B3", "B4"};
+    for (int i = 0; i < 4; i++) {
         lv_obj_t *btn_cont = lv_obj_create(row);
         lv_obj_set_size(btn_cont, 34, INPUT_PANEL_HEIGHT - 12);
         lv_obj_set_style_bg_opa(btn_cont, LV_OPA_TRANSP, 0);
@@ -337,7 +337,7 @@ void ui_set_nav_switch(uint8_t index, bool up, bool down, bool left, bool right,
 
 void ui_set_button(uint8_t index, bool pressed)
 {
-    if (index >= 3 || !ui_Buttons[index]) return;
+    if (index >= 4 || !ui_Buttons[index]) return;
     lv_obj_remove_style(ui_Buttons[index], pressed ? &style_btn_default : &style_btn_pressed, 0);
     lv_obj_add_style(ui_Buttons[index], pressed ? &style_btn_pressed : &style_btn_default, 0);
 }

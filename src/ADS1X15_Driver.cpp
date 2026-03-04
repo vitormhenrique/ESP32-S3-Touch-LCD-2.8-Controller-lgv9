@@ -81,6 +81,9 @@ bool ADS1X15_Driver::begin() {
 }
 
 void ADS1X15_Driver::update() {
+    // All ADC reads share the I2C bus - take mutex once for entire update
+    if (!I2C_MutexTake(20)) return;  // Skip this cycle if bus is busy
+    
     // Update all gimbal axes
     for (uint8_t i = 0; i < NUM_GIMBAL_AXES; i++) {
         updateGimbalAxis(i);
@@ -90,6 +93,8 @@ void ADS1X15_Driver::update() {
     for (uint8_t i = 0; i < NUM_POTENTIOMETERS; i++) {
         updatePotentiometer(i);
     }
+    
+    I2C_MutexGive();
     
     // Advance filter index
     _filterIndex = (_filterIndex + 1) % ANALOG_FILTER_SAMPLES;
@@ -248,5 +253,11 @@ bool ADS1X15_Driver::isReady() {
 int16_t ADS1X15_Driver::readRaw(uint8_t adc, uint8_t channel) {
     if (adc > 2 || channel > 3) return 0;
     if (!_initialized[adc]) return 0;
-    return _ads[adc].readADC_SingleEnded(channel);
+    
+    int16_t result = 0;
+    if (I2C_MutexTake(20)) {
+        result = _ads[adc].readADC_SingleEnded(channel);
+        I2C_MutexGive();
+    }
+    return result;
 }

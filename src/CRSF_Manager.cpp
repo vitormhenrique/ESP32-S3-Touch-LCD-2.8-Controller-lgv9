@@ -197,24 +197,28 @@ void CRSF_Manager::gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]) 
     inputs.encoder[0] = RCInput.getEncoderPosition(ENCODER_1);
     inputs.encoder[1] = RCInput.getEncoderPosition(ENCODER_2);
 
-    // 8 two-position switches (indices 0-7 in SWITCH_CONFIGS)
-    for (int i = 0; i < 8; i++) {
+    // 6 two-position switches (indices 0-5: SW_A,B,C,D,G,H)
+    for (int i = 0; i < 6; i++) {
         inputs.switches[i] = RCInput.isSwitchOn(i);
     }
+    // Bits 6-7 reserved (SW_E/SW_F now handled as 3-pos toggles)
+    inputs.switches[6] = false;
+    inputs.switches[7] = false;
 
-    // 3 buttons (BTN_1=idx 8, BTN_3=idx 9, BTN_4=idx 10)
-    inputs.buttons[0] = RCInput.isSwitchOn(8);   // BTN_1
-    inputs.buttons[1] = RCInput.isSwitchOn(9);   // BTN_3
-    inputs.buttons[2] = RCInput.isSwitchOn(10);  // BTN_4
+    // 4 buttons (BTN_1=idx 6, BTN_2=idx 7, BTN_3=idx 8, BTN_4=idx 9)
+    inputs.buttons[0] = RCInput.isSwitchOn(6);   // BTN_1
+    inputs.buttons[1] = RCInput.isSwitchOn(7);   // BTN_2
+    inputs.buttons[2] = RCInput.isSwitchOn(8);   // BTN_3
+    inputs.buttons[3] = RCInput.isSwitchOn(9);   // BTN_4
 
-    // 3-position toggles
+    // 3-position toggles (SW_E, SW_F)
     inputs.toggles[0] = (uint8_t)RCInput.getToggle3Pos(TOGGLE_3POS_1);
     inputs.toggles[1] = (uint8_t)RCInput.getToggle3Pos(TOGGLE_3POS_2);
 
-    // Nav switches (NAV1: indices 11-15, NAV2: indices 16-20)
+    // Nav switches (NAV1: indices 10-14, NAV2: indices 15-19)
     for (int i = 0; i < 5; i++) {
-        inputs.nav[0][i] = RCInput.isSwitchOn(11 + i);  // NAV1 U,D,L,R,C
-        inputs.nav[1][i] = RCInput.isSwitchOn(16 + i);  // NAV2 U,D,L,R,C
+        inputs.nav[0][i] = RCInput.isSwitchOn(10 + i);  // NAV1 U,D,L,R,C
+        inputs.nav[1][i] = RCInput.isSwitchOn(15 + i);  // NAV2 U,D,L,R,C
     }
 
     ChannelPack::packInputs(&inputs, channels);

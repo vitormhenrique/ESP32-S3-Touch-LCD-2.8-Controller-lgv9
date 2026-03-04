@@ -4,9 +4,6 @@
 // Global instance
 MCP23017_Driver SwitchInput;
 
-// I2C mutex for thread-safe access
-static SemaphoreHandle_t _i2cMutex = NULL;
-
 // Static configuration arrays
 static const SwitchConfig_t _defaultSwitchConfigs[NUM_SWITCHES] = SWITCH_CONFIGS;
 static const Toggle3PosConfig_t _defaultToggle3PosConfigs[NUM_3POS_TOGGLES] = TOGGLE_3POS_CONFIGS;
@@ -15,6 +12,8 @@ MCP23017_Driver::MCP23017_Driver() {
     _initialized[0] = false;
     _initialized[1] = false;
     _lastUpdateMs = 0;
+    _cachedGPIO[0] = 0xFFFF;  // Pull-ups = all high
+    _cachedGPIO[1] = 0xFFFF;
 }
 
 void MCP23017_Driver::initConfigs() {
@@ -38,39 +37,32 @@ void MCP23017_Driver::initConfigs() {
 bool MCP23017_Driver::begin() {
     initConfigs();
     
-    // Create I2C mutex for thread-safe access
-    if (_i2cMutex == NULL) {
-        _i2cMutex = xSemaphoreCreateMutex();
-        if (_i2cMutex == NULL) {
-            printf("MCP23017: ERROR - Failed to create I2C mutex\r\n");
-            return false;
-        }
-    }
-    
     // Initialize first MCP23017
-    if (_mcp[0].begin_I2C(MCP23017_ADDR_1, &Wire)) {
-        _initialized[0] = true;
-        printf("MCP23017 #1 (0x%02X) initialized\r\n", MCP23017_ADDR_1);
-        
-        // Configure all pins as inputs with pull-ups
-        for (uint8_t pin = 0; pin < 16; pin++) {
-            _mcp[0].pinMode(pin, INPUT_PULLUP);
+    if (I2C_MutexTake(100)) {
+        if (_mcp[0].begin_I2C(MCP23017_ADDR_1, &Wire)) {
+            _initialized[0] = true;
+            printf("MCP23017 #1 (0x%02X) initialized\r\n", MCP23017_ADDR_1);
+            for (uint8_t pin = 0; pin < 16; pin++) {
+                _mcp[0].pinMode(pin, INPUT_PULLUP);
+            }
+        } else {
+            printf("MCP23017 #1 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_1);
         }
-    } else {
-        printf("MCP23017 #1 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_1);
+        I2C_MutexGive();
     }
     
     // Initialize second MCP23017
-    if (_mcp[1].begin_I2C(MCP23017_ADDR_2, &Wire)) {
-        _initialized[1] = true;
-        printf("MCP23017 #2 (0x%02X) initialized\r\n", MCP23017_ADDR_2);
-        
-        // Configure all pins as inputs with pull-ups
-        for (uint8_t pin = 0; pin < 16; pin++) {
-            _mcp[1].pinMode(pin, INPUT_PULLUP);
+    if (I2C_MutexTake(100)) {
+        if (_mcp[1].begin_I2C(MCP23017_ADDR_2, &Wire)) {
+            _initialized[1] = true;
+            printf("MCP23017 #2 (0x%02X) initialized\r\n", MCP23017_ADDR_2);
+            for (uint8_t pin = 0; pin < 16; pin++) {
+                _mcp[1].pinMode(pin, INPUT_PULLUP);
+            }
+        } else {
+            printf("MCP23017 #2 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_2);
         }
-    } else {
-        printf("MCP23017 #2 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_2);
+        I2C_MutexGive();
     }
     
     return _initialized[0] && _initialized[1];
@@ -79,12 +71,20 @@ bool MCP23017_Driver::begin() {
 void MCP23017_Driver::update() {
     uint32_t now = millis();
     
-    // Update all standard switches
+    // Bulk-read all 16 pins from each expander in ONE I2C transaction each
+    if (I2C_MutexTake(10)) {
+        for (uint8_t exp = 0; exp < 2; exp++) {
+            if (_initialized[exp]) {
+                _cachedGPIO[exp] = _mcp[exp].readGPIOAB();
+            }
+        }
+        I2C_MutexGive();
+    }
+    
+    // Now process all switches/toggles from cached data (no I2C needed)
     for (uint8_t i = 0; i < NUM_SWITCHES; i++) {
         updateSwitch(i);
     }
-    
-    // Update all 3-position toggles
     for (uint8_t i = 0; i < NUM_3POS_TOGGLES; i++) {
         updateToggle3Pos(i);
     }
@@ -98,13 +98,11 @@ void MCP23017_Driver::updateSwitch(uint8_t index) {
     SwitchConfig_t* cfg = &_switchConfigs[index];
     SwitchState_Runtime_t* state = &_switchStates[index];
     
-    // Check if expander is initialized
     if (!_initialized[cfg->expander]) return;
     
-    // Read pin state (uses mutex internally)
-    bool pinState = readPin(cfg->expander, cfg->pin);
+    // Read from cached GPIO (no I2C!)
+    bool pinState = getCachedPin(cfg->expander, cfg->pin);
     
-    // Apply inversion if needed
     if (cfg->inverted) {
         pinState = !pinState;
     }
@@ -112,7 +110,6 @@ void MCP23017_Driver::updateSwitch(uint8_t index) {
     SwitchState_t newState = pinState ? SWITCH_ON : SWITCH_OFF;
     uint32_t now = millis();
     
-    // Debounce: only accept change if enough time has passed
     if (newState != state->state) {
         if ((now - state->last_change_ms) >= DEBOUNCE_MS) {
             state->prev_state = state->state;
@@ -128,33 +125,28 @@ void MCP23017_Driver::updateToggle3Pos(uint8_t index) {
     Toggle3PosConfig_t* cfg = &_toggle3PosConfigs[index];
     Toggle3PosState_Runtime_t* state = &_toggle3PosStates[index];
     
-    // Check if expander is initialized
     if (!_initialized[cfg->expander]) return;
     
-    // Read both pins (uses mutex internally)
-    bool pinUp = readPin(cfg->expander, cfg->pin_up);
-    bool pinDown = readPin(cfg->expander, cfg->pin_down);
+    // Read from cached GPIO (no I2C!)
+    bool pinUp = getCachedPin(cfg->expander, cfg->pin_up);
+    bool pinDown = getCachedPin(cfg->expander, cfg->pin_down);
     
-    // Apply inversion if needed
     if (cfg->inverted) {
         pinUp = !pinUp;
         pinDown = !pinDown;
     }
     
-    // Determine position
     Toggle3PosState_t newState;
     if (pinUp && !pinDown) {
         newState = TOGGLE_POS_UP;
     } else if (!pinUp && pinDown) {
         newState = TOGGLE_POS_DOWN;
     } else {
-        // Neither or both active = center position
         newState = TOGGLE_POS_CENTER;
     }
     
     uint32_t now = millis();
     
-    // Debounce
     if (newState != state->state) {
         if ((now - state->last_change_ms) >= DEBOUNCE_MS) {
             state->prev_state = state->state;
@@ -205,13 +197,23 @@ bool MCP23017_Driver::readPin(uint8_t expander, uint8_t pin) {
     if (expander > 1 || pin > 15) return false;
     if (!_initialized[expander]) return false;
     
-    // Thread-safe I2C access
+    // Thread-safe I2C access using global mutex
     bool result = false;
-    if (_i2cMutex != NULL && xSemaphoreTake(_i2cMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    if (I2C_MutexTake(10)) {
         result = _mcp[expander].digitalRead(pin);
-        xSemaphoreGive(_i2cMutex);
+        I2C_MutexGive();
     }
     return result;
+}
+
+bool MCP23017_Driver::getCachedPin(uint8_t expander, uint8_t pin) {
+    if (expander > 1 || pin > 15) return false;
+    return (_cachedGPIO[expander] >> pin) & 0x01;
+}
+
+uint16_t MCP23017_Driver::getCachedGPIO(uint8_t expander) {
+    if (expander > 1) return 0xFFFF;
+    return _cachedGPIO[expander];
 }
 
 bool MCP23017_Driver::isReady() {

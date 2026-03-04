@@ -24,7 +24,7 @@ static lv_indev_t *lvgl_encoder_indev = NULL;
 static lv_group_t *lvgl_default_group = NULL;
 
 /* Encoder button pin - using NAV2_C (center) as encoder button */
-#define ENCODER_BUTTON_INDEX  20  // NAV2_C in SWITCH_CONFIGS
+#define ENCODER_BUTTON_INDEX  19  // NAV2_C in SWITCH_CONFIGS (index 19 after 4-button layout)
 
 /* Serial debugging */
 void Lvgl_print(const char * buf)
