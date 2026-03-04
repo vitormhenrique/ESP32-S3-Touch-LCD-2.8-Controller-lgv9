@@ -32,8 +32,8 @@
 #define CPACK_CH_POT2        5
 #define CPACK_CH_ENC1        6
 #define CPACK_CH_ENC2        7
-#define CPACK_CH_SWITCHES    8   // 8x 2-pos switches bitfield
-#define CPACK_CH_BTN_TOGGLE  9   // 3 buttons + 2 three-pos toggles
+#define CPACK_CH_SWITCHES    8   // 6x 2-pos switches (A,B,C,D,G,H) + 2 reserved
+#define CPACK_CH_BTN_TOGGLE  9   // 4 buttons + 2 three-pos toggles (SW_E, SW_F)
 #define CPACK_CH_NAV        10   // 10 nav switch buttons (2x5)
 #define CPACK_NUM_CHANNELS  16
 
