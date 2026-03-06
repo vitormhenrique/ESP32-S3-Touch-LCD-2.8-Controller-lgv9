@@ -22,6 +22,16 @@
 #define MCP23017_ADDR_1     0x20    // First expander
 #define MCP23017_ADDR_2     0x21    // Second expander
 
+//=============================================================================
+// MCP23017 Interrupt Configuration
+// Both MCP23017 INTA+INTB outputs are wire-ORed to a single ESP32 GPIO.
+// Set MCP_USE_INTERRUPT to 1 for interrupt-driven updates (lower latency,
+// less I2C traffic) or 0 for polling-only mode.
+//=============================================================================
+#define MCP_USE_INTERRUPT   1       // 1 = interrupt-driven, 0 = polling only
+#define MCP_INT_PIN         15      // ESP32 GPIO connected to MCP23017 INTA+INTB
+#define MCP_INT_FALLBACK_MS 100     // Periodic fallback read interval (ms)
+
 // ADS1X15 addresses (ADDR pin: GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B)
 #define ADS1X15_ADDR_1      0x48    // Gimbal 1 (left stick X/Y) + Gimbal 2 X
 #define ADS1X15_ADDR_2      0x49    // Gimbal 2 Y + Potentiometers

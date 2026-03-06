@@ -196,6 +196,12 @@ void Encoder_Driver::processEncoder(uint8_t index, uint8_t new_state) {
 void Encoder_Driver::pollEncoders() {
     if (!_initialized) return;
 
+#if MCP_USE_INTERRUPT
+    // In interrupt mode, refresh MCP cache immediately if an interrupt fired.
+    // This gives sub-millisecond encoder response to pin changes.
+    SwitchInput.checkAndUpdateInterrupt();
+#endif
+
     // Take mutex for thread safety
     if (_encoderMutex != NULL && xSemaphoreTake(_encoderMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         for (uint8_t i = 0; i < ENCODER_COUNT; i++) {

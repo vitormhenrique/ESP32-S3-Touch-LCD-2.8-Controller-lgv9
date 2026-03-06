@@ -8,6 +8,14 @@ MCP23017_Driver SwitchInput;
 static const SwitchConfig_t _defaultSwitchConfigs[NUM_SWITCHES] = SWITCH_CONFIGS;
 static const Toggle3PosConfig_t _defaultToggle3PosConfigs[NUM_3POS_TOGGLES] = TOGGLE_3POS_CONFIGS;
 
+#if MCP_USE_INTERRUPT
+volatile bool MCP23017_Driver::_interruptPending = false;
+
+void IRAM_ATTR MCP23017_Driver::_isrHandler() {
+    _interruptPending = true;
+}
+#endif
+
 MCP23017_Driver::MCP23017_Driver() {
     _initialized[0] = false;
     _initialized[1] = false;
@@ -65,13 +73,64 @@ bool MCP23017_Driver::begin() {
         I2C_MutexGive();
     }
     
+#if MCP_USE_INTERRUPT
+    // Setup MCP23017 interrupt-on-change after init
+    if (_initialized[0] || _initialized[1]) {
+        configureInterrupts();
+    }
+#endif
+    
     return _initialized[0] && _initialized[1];
 }
 
+#if MCP_USE_INTERRUPT
+void MCP23017_Driver::configureInterrupts() {
+    // Configure both MCPs: mirror INTA/INTB (tied together physically),
+    // open-drain outputs (wire-OR safe), active-LOW
+    for (uint8_t i = 0; i < 2; i++) {
+        if (!_initialized[i]) continue;
+        _mcp[i].setupInterrupts(true, true, LOW);
+        // Enable interrupt-on-change for all 16 pins
+        for (uint8_t pin = 0; pin < 16; pin++) {
+            _mcp[i].setupInterruptPin(pin, CHANGE);
+        }
+        // Clear any pending interrupts by reading INTCAP
+        _mcp[i].clearInterrupts();
+    }
+
+    // Configure ESP32 GPIO with internal pull-up (open-drain needs it)
+    pinMode(MCP_INT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(MCP_INT_PIN), _isrHandler, FALLING);
+
+    printf("MCP23017: Interrupt mode enabled on GPIO%d\r\n", MCP_INT_PIN);
+}
+#endif
+
 void MCP23017_Driver::update() {
     uint32_t now = millis();
-    
-    // Bulk-read all 16 pins from each expander in ONE I2C transaction each
+
+#if MCP_USE_INTERRUPT
+    // Interrupt mode: only do I2C read when interrupt fired or periodic fallback
+    bool needsRead = _interruptPending;
+
+    // Periodic fallback to catch any edge-case missed interrupts
+    if ((now - _lastUpdateMs) >= MCP_INT_FALLBACK_MS) {
+        needsRead = true;
+    }
+
+    if (needsRead) {
+        _interruptPending = false;
+        if (I2C_MutexTake(10)) {
+            for (uint8_t exp = 0; exp < 2; exp++) {
+                if (_initialized[exp]) {
+                    _cachedGPIO[exp] = _mcp[exp].readGPIOAB();
+                }
+            }
+            I2C_MutexGive();
+        }
+    }
+#else
+    // Polling mode: always bulk-read
     if (I2C_MutexTake(10)) {
         for (uint8_t exp = 0; exp < 2; exp++) {
             if (_initialized[exp]) {
@@ -80,6 +139,7 @@ void MCP23017_Driver::update() {
         }
         I2C_MutexGive();
     }
+#endif
     
     // Now process all switches/toggles from cached data (no I2C needed)
     for (uint8_t i = 0; i < NUM_SWITCHES; i++) {
@@ -219,3 +279,25 @@ uint16_t MCP23017_Driver::getCachedGPIO(uint8_t expander) {
 bool MCP23017_Driver::isReady() {
     return _initialized[0] && _initialized[1];
 }
+
+#if MCP_USE_INTERRUPT
+bool MCP23017_Driver::checkAndUpdateInterrupt() {
+    if (!_interruptPending) return false;
+
+    _interruptPending = false;
+
+    // Read BOTH chips to update cache AND clear ALL tied interrupts
+    if (I2C_MutexTake(5)) {
+        for (uint8_t exp = 0; exp < 2; exp++) {
+            if (_initialized[exp]) {
+                _cachedGPIO[exp] = _mcp[exp].readGPIOAB();
+            }
+        }
+        I2C_MutexGive();
+        return true;
+    }
+    // Mutex busy — re-flag so next caller retries
+    _interruptPending = true;
+    return false;
+}
+#endif

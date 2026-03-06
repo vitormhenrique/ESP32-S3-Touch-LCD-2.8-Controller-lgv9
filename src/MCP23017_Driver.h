@@ -105,6 +105,16 @@ public:
      */
     bool isReady();
 
+#if MCP_USE_INTERRUPT
+    /**
+     * Check if an interrupt is pending and, if so, bulk-read both chips
+     * to refresh the cached GPIO and clear the interrupt.
+     * Safe to call from any task context (takes I2C mutex internally).
+     * @return true if cache was refreshed
+     */
+    bool checkAndUpdateInterrupt();
+#endif
+
 private:
     Adafruit_MCP23X17 _mcp[2];          // Two MCP23017 expanders
     bool _initialized[2];                // Initialization status
@@ -121,7 +131,13 @@ private:
     Toggle3PosState_Runtime_t _toggle3PosStates[NUM_3POS_TOGGLES];
     
     uint32_t _lastUpdateMs;
-    
+
+#if MCP_USE_INTERRUPT
+    static volatile bool _interruptPending;
+    static void IRAM_ATTR _isrHandler();
+    void configureInterrupts();
+#endif
+
     /**
      * Initialize switch configurations from defines
      */
