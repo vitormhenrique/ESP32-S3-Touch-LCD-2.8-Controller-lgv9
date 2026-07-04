@@ -1,8 +1,6 @@
 #include "LVGL_Example.h"
-#include "LVGL_Music.h"
+#include "SD_Card.h"
 #include <demos/lv_demos.h>
-// #include <demos/music/lv_demo_music_main.h>
-// #include <demos/music/lv_demo_music_list.h>
 
 
 /**********************
@@ -18,7 +16,6 @@ typedef enum {
  *  STATIC PROTOTYPES
  **********************/
 static void Onboard_create(lv_obj_t * parent);
-static void Music_create(lv_obj_t * parent);
 static void color_changer_create(lv_obj_t * parent);
 
 static void color_changer_event_cb(lv_event_t * e);
@@ -52,7 +49,6 @@ static const lv_font_t * font_large;
 static const lv_font_t * font_normal;
 
 static lv_timer_t * auto_step_timer;
-static lv_color_t original_screen_bg_color;
 
 static lv_timer_t * meter2_timer;
 
@@ -126,10 +122,8 @@ void Lvgl_Example1(void){
   }
 
   lv_obj_t * t1 = lv_tabview_add_tab(tv, "Onboard");
-  lv_obj_t * t2 = lv_tabview_add_tab(tv, "music");
 
   Onboard_create(t1);
-  Music_create(t2);
   
   // color_changer_create(tv);
 }
@@ -312,14 +306,7 @@ void IRAM_ATTR example1_increase_lvgl_tick(lv_timer_t * t)
   lv_slider_set_value(Backlight_slider, LCD_Backlight, LV_ANIM_ON); 
   LVGL_Backlight_adjustment(LCD_Backlight);
 }
-static void Music_create(lv_obj_t * parent)
-{
-  static lv_obj_t * ctrl;
-  original_screen_bg_color = lv_obj_get_style_bg_color(parent, (lv_part_t)LV_PART_MAIN);
-  lv_obj_set_style_bg_color(parent, lv_color_hex(0x343247), 0);
 
-  ctrl = _lv_demo_music_main_create(parent);
-}
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 static void color_changer_create(lv_obj_t * parent)
@@ -465,7 +452,7 @@ void Backlight_adjustment_event_cb(lv_event_t * e) {
     LVGL_Backlight_adjustment(Backlight);
   }
   else
-    printf("Volume out of range: %d\n", Volume);
+    printf("Backlight out of range: %d\n", Backlight);
 
 }
 

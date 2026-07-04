@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include "Display_ST7789.h"
-#include "Audio_PCM5101.h"
 #include "RTC_PCF85063.h"
 #include "Gyro_QMI8658.h"
 #include "LVGL_Driver.h"
@@ -55,7 +54,7 @@ void Driver_Loop() {
 }
 void setup()
 {
-  Flash_test();
+  // Flash_test();
   PWR_Init();
   BAT_Init();
   I2C_Init();
@@ -63,8 +62,7 @@ void setup()
   QMI8658_Init();
   Backlight_Init();
 
-  SD_Init();
-  Audio_Init();
+  // SD_Init();
   LCD_Init();
   Lvgl_Init();
   
