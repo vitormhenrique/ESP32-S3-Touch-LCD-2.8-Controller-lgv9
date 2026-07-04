@@ -17,6 +17,14 @@
 #define CRSF_PING_INTERVAL_MS   1000    // Device ping interval while waiting for link
 #define CRSF_LOG_INTERVAL_MS    30000   // Periodic stats log every 30s
 
+// Hardware half-duplex: let UART1 drive the SN74LVC1G125 OE pin via the
+// RS485 half-duplex RTS signal (inverted through the GPIO matrix).
+// The UART TX-done interrupt releases the bus, so OE timing is immune to
+// task preemption. Set to 0 to fall back to software GPIO toggling.
+#ifndef CRSF_HW_HALF_DUPLEX
+#define CRSF_HW_HALF_DUPLEX     1
+#endif
+
 // CRSF frame types not defined in AlfredoCRSF library
 #define CRSF_FRAMETYPE_DEVICE_PING  0x28
 #define CRSF_TASK_STACK_SIZE    4096

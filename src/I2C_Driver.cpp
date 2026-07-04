@@ -5,6 +5,9 @@ static SemaphoreHandle_t _i2cGlobalMutex = NULL;
 
 void I2C_Init(void) {
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  Wire.setClock(400000);  // Fast-mode I2C: all devices on this bus support 400kHz.
+                          // At the default 100kHz the DriverTask held the bus
+                          // (and its mutex) for most of every 20ms cycle.
   
   // Create the global I2C mutex (once)
   if (_i2cGlobalMutex == NULL) {

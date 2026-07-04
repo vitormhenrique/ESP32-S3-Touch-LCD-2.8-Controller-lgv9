@@ -1,24 +1,34 @@
 #include "Audio_PCM5101.h"
 Audio audio;
 uint8_t Volume = Volume_MAX;
-void IRAM_ATTR example_increase_audio_tick(void *arg)
+
+// Audio service task. Runs on core 1 at low priority.
+// NOTE: audio.loop() must NOT run in the esp_timer task: that task runs at
+// priority 22 on core 0 and SD reads / MP3 decode inside it preempted the
+// CRSF and driver tasks for milliseconds at a time, breaking the CRSF
+// half-duplex timing (ELRS bind/link failures under full UI load).
+static void AudioTask(void *param)
 {
-  audio.loop();
+  while (true) {
+    audio.loop();
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
 }
+
 void Audio_Init() {
   // Audio
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(Volume); // 0...21    
 
-  esp_timer_handle_t audio_tick_timer = NULL;
-  const esp_timer_create_args_t audio_tick_timer_args = {
-    .callback = &example_increase_audio_tick,
-    .dispatch_method = ESP_TIMER_TASK,  
-    .name = "audio_tick",
-    .skip_unhandled_events = true       
-  };
-  esp_timer_create(&audio_tick_timer_args, &audio_tick_timer);
-  esp_timer_start_periodic(audio_tick_timer, EXAMPLE_Audio_TICK_PERIOD_MS * 1000);
+  xTaskCreatePinnedToCore(
+    AudioTask,
+    "AudioTask",
+    8192,       // MP3 decode needs a healthy stack
+    NULL,
+    2,          // Just above loopTask (1), far below timing-critical tasks
+    NULL,
+    1           // Core 1 - keep core 0 free for input + CRSF
+  );
 }
 
 void Volume_adjustment(uint8_t Volume) {

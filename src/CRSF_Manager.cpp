@@ -3,7 +3,10 @@
 #include "ui/screens/ui_screen_telemetry.h"
 #include <cstring>
 #include <cmath>
-#include <driver/gpio.h>  // For gpio_set_pull_mode
+#include <driver/gpio.h>   // For gpio_set_pull_mode
+#include <driver/uart.h>   // For RS485 half-duplex mode
+#include <esp_rom_gpio.h>  // For inverted GPIO matrix routing
+#include <soc/gpio_sig_map.h>  // For U1RTS_OUT_IDX
 
 // Global instance
 CRSF_Manager CRSFLink;
@@ -55,6 +58,21 @@ bool CRSF_Manager::begin() {
     // Initialize UART
     _serial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_UART_RX_PIN, CRSF_UART_TX_PIN);
     printf("[CRSF] Serial1 initialized\n");
+
+#if CRSF_HW_HALF_DUPLEX
+    // Hand OE control to the UART peripheral (RS485 half-duplex mode).
+    // The driver asserts RTS (pin HIGH) for the exact duration of each
+    // transmission and releases it from the TX-done interrupt - immune to
+    // task preemption, unlike software GPIO toggling.
+    // OE is active-low, so the RTS signal is routed to the pin INVERTED:
+    //   transmitting -> OE LOW (buffer drives bus)
+    //   idle         -> OE HIGH (buffer tri-state, RX listens)
+    uart_set_pin(UART_NUM_1, CRSF_UART_TX_PIN, CRSF_UART_RX_PIN,
+                 CRSF_OE_PIN, UART_PIN_NO_CHANGE);
+    uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
+    esp_rom_gpio_connect_out_signal(CRSF_OE_PIN, U1RTS_OUT_IDX, true, false);
+    printf("[CRSF] Hardware half-duplex enabled (RS485 mode, inverted RTS on OE)\n");
+#endif
 
     // Initialize CRSF library
     _crsf.begin(_serial);
@@ -300,6 +318,11 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
     // Half-duplex with hardware buffer (SN74LVC1G125DCKR):
     // When using a tri-state buffer, we DON'T get echo - the buffer isolates TX from RX.
     // So no need to discard echo like in one-wire mode.
+#if CRSF_HW_HALF_DUPLEX
+    // UART hardware controls OE (RS485 mode) - just write.
+    size_t written = _serial.write(frame, frameLen);
+    _serial.flush();           // Wait for TX to finish (keeps frame pacing honest)
+#else
     setOeMode(true);           // OE LOW = buffer enabled, TX drives line
     delayMicroseconds(2);      // Let OE settle
 
@@ -312,6 +335,7 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
     delayMicroseconds(30);     // Allow last byte to shift out
 
     setOeMode(false);          // OE HIGH = buffer tri-state, RX can receive
+#endif
     
     _frameDebugCount++;
     
@@ -352,12 +376,17 @@ void CRSF_Manager::sendDevicePing() {
     frame[4] = CRSF_ADDRESS_RADIO_TRANSMITTER;
     frame[5] = _crc.calc(&frame[2], 3);
 
+#if CRSF_HW_HALF_DUPLEX
+    _serial.write(frame, 6);
+    _serial.flush();
+#else
     setOeMode(true);
     delayMicroseconds(2);
     _serial.write(frame, 6);
     _serial.flush();
     delayMicroseconds(30);
     setOeMode(false);
+#endif
 }
 
 void CRSF_Manager::setOeMode(bool txMode) {
