@@ -16,16 +16,28 @@
 #include "CRSF_Manager.h"
 
 void DriverTask(void *parameter) {
+  // Start CRSF before input polling, but CRSF_Init deliberately waits before
+  // configuring Serial1 so the ELRS module can finish cold boot/autobaud.
+  // Real RC frames are internally gated on RCInput.isReady().
+  CRSF_Init();
+
   // Wireless_Test2();  // Disabled - WiFi/BLE scan not needed for RC
   Input_Init();  // Initialize InputManager
-  
+
   // Load saved gimbal calibrations from Settings
   ui_load_gimbal_calibrations();
 
-  // Initialize CRSF link (spawns its own FreeRTOS task)
-  CRSF_Init();
+  // Until the ELRS link is up, inputs/telemetry are useless - poll slowly to
+  // keep the I2C bus and core 0 quiet while the CRSF task establishes the
+  // link. Once linked, switch to the normal 50Hz polling permanently.
+  bool everLinked = false;
 
   while(1){
+    if (!everLinked && CRSFLink.isLinkUp()) {
+      everLinked = true;
+      printf("[Driver] Link up - switching input polling to 50Hz\n");
+    }
+
     Perf_StartSection(PERF_COUNTER_DRIVER_LOOP);
     
     Perf_StartSection(PERF_COUNTER_INPUT_UPDATE);
@@ -38,7 +50,8 @@ void DriverTask(void *parameter) {
     QMI8658_Loop(); 
     
     Perf_EndSection(PERF_COUNTER_DRIVER_LOOP);
-    vTaskDelay(pdMS_TO_TICKS(20));  // 50Hz polling for responsive inputs
+    // 50Hz once linked; 10Hz while waiting for link (keeps PWR button responsive)
+    vTaskDelay(pdMS_TO_TICKS(everLinked ? 20 : 100));
   }
 }
 void Driver_Loop() {
@@ -54,6 +67,13 @@ void Driver_Loop() {
 }
 void setup()
 {
+  // Tri-state the CRSF half-duplex buffer IMMEDIATELY so the bus stays quiet
+  // while the display/LVGL initialize. A floating OE during boot can spray
+  // garbage at the ELRS module, sending its UART watchdog baud-cycling and
+  // delaying (sometimes preventing) the bind until a reboot.
+  pinMode(CRSF_OE_PIN, OUTPUT);
+  digitalWrite(CRSF_OE_PIN, HIGH);  // Active-low OE: HIGH = hi-Z
+
   // Flash_test();
   PWR_Init();
   BAT_Init();

@@ -9,13 +9,27 @@
 // Configuration
 //=============================================================================
 
-#define CRSF_BAUD               420000
+#define CRSF_BAUD               400000
 #define CRSF_DEFAULT_RATE_HZ    50
-#define CRSF_BOOTSTRAP_RATE_HZ  10      // Low-rate bootstrap to minimize echo while waking TX module
+#define CRSF_BOOTSTRAP_RATE_HZ  50      // ELRS TX module UART watchdog re-evaluates good/bad
+                                        // packets every 1s and cycles baud rates when unhappy;
+                                        // a steady 50Hz stream locks it quickly and reliably.
+                                        // (Echo is no longer a concern with HW half-duplex.)
 #define CRSF_LINK_TIMEOUT_MS    1000
 #define CRSF_LINK_DIAG_MS       2000    // Diagnostic log interval while waiting for link
 #define CRSF_PING_INTERVAL_MS   1000    // Device ping interval while waiting for link
 #define CRSF_LOG_INTERVAL_MS    30000   // Periodic stats log every 30s
+#define CRSF_BOOT_QUIET_MS      15000   // Do not even configure the CRSF UART before this
+                                        // point after power-on. Some ELRS TX modules are still
+                                        // booting/autobauding at 5s and can wedge until the
+                                        // handset MCU is reset while the module stays powered.
+#define CRSF_RETRY_SILENCE_MS   3000    // If the module stays silent this long past a full retry
+                                        // period, go quiet (mimics what a manual ESP32 reset does)
+#define CRSF_RETRY_PERIOD_MS    10000   // Module response deadline before each silent retry cycle
+
+// UI log queue (drained on the LVGL thread via updateUI)
+#define CRSF_LOG_QUEUE_LEN      8
+#define CRSF_LOG_MSG_MAX        64
 
 // Hardware half-duplex: let UART1 drive the SN74LVC1G125 OE pin via the
 // RS485 half-duplex RTS signal (inverted through the GPIO matrix).
@@ -86,6 +100,7 @@ public:
 
     void setFrameRate(uint16_t hz);
     bool isReady() const { return _initialized; }
+    bool isLinkUp() const { return _linkOk; }  // Lock-free read; used to gate low-priority work
 
     // FreeRTOS task entry point (must be public for xTaskCreate)
     static void taskFunc(void* param);
@@ -118,6 +133,12 @@ private:
     bool     _prevAttitudeValid;
     uint32_t _lastLogMs;
     uint32_t _lastStatsLogMs;
+
+    // UI log queue: CRSF task produces, LVGL thread (updateUI) consumes.
+    // LVGL is NOT thread-safe - calling ui_telemetry_add_log directly from
+    // the CRSF task races the core-1 renderer and corrupts memory.
+    QueueHandle_t _logQueue;
+    void queueLog(const char* msg);
 
     // Internal methods
     void gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]);

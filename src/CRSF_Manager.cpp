@@ -34,6 +34,7 @@ CRSF_Manager::CRSF_Manager()
     , _prevAttitudeValid(false)
     , _lastLogMs(0)
     , _lastStatsLogMs(0)
+    , _logQueue(nullptr)
 {
 }
 
@@ -42,10 +43,21 @@ CRSF_Manager::CRSF_Manager()
 //=============================================================================
 
 bool CRSF_Manager::begin() {
+    uint32_t nowMs = millis();
+    if (nowMs < CRSF_BOOT_QUIET_MS) {
+        printf("[CRSF] Holding UART setup for %lu ms while ELRS module boots...\n",
+               (unsigned long)(CRSF_BOOT_QUIET_MS - nowMs));
+        vTaskDelay(pdMS_TO_TICKS(CRSF_BOOT_QUIET_MS - nowMs));
+    }
+
     printf("[CRSF] Initializing...\n");
     printf("[CRSF] TX Pin: %d, RX Pin: %d, OE Pin: %d\n",
            CRSF_UART_TX_PIN, CRSF_UART_RX_PIN, CRSF_OE_PIN);
     printf("[CRSF] Baud: %d, Frame rate: %d Hz\n", CRSF_BAUD, CRSF_DEFAULT_RATE_HZ);
+
+    // Clear any stale pad hold from previous experimental firmware/recovery
+    // so the UART RTS matrix can control OE during CRSF traffic.
+    gpio_hold_dis((gpio_num_t)CRSF_OE_PIN);
 
     // Configure OE pin for SN74LVC1G125 buffer control
     // Active-low: HIGH = hi-Z (RX mode), LOW = output active (TX mode)
@@ -84,6 +96,9 @@ bool CRSF_Manager::begin() {
         return false;
     }
 
+    // Log queue: CRSF task -> LVGL thread (see queueLog)
+    _logQueue = xQueueCreate(CRSF_LOG_QUEUE_LEN, CRSF_LOG_MSG_MAX);
+
     _initialized = true;
     printf("[CRSF] Initialized at %d baud, %d Hz frame rate\n",
            CRSF_BAUD, _frameRateHz);
@@ -99,12 +114,42 @@ bool CRSF_Manager::begin() {
 void CRSF_Manager::taskFunc(void* param) {
     CRSF_Manager* self = static_cast<CRSF_Manager*>(param);
 
-    // Small delay to let InputManager initialize
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // Safety net only. begin() already waits before configuring Serial1, but
+    // keep this guard if CRSF_Init() is ever refactored to call begin earlier.
+    uint32_t nowMs = millis();
+    if (nowMs < CRSF_BOOT_QUIET_MS) {
+        printf("[CRSF] Waiting %lu ms for ELRS module boot...\n",
+               (unsigned long)(CRSF_BOOT_QUIET_MS - nowMs));
+        vTaskDelay(pdMS_TO_TICKS(CRSF_BOOT_QUIET_MS - nowMs));
+    }
+
+    // Flush any garbage received while the module was booting
+    while (self->_serial.available()) self->_serial.read();
+
     printf("[CRSF] Task started on core %d\n", xPortGetCoreID());
+
+    // Cold-boot recovery without resetting the MCU: if the module never
+    // responds, periodically go silent so the module parser can time out and
+    // resync, then start a clean CRSF stream again.
+    uint32_t retryDeadlineMs = millis() + CRSF_RETRY_PERIOD_MS;
 
     while (true) {
         self->update();
+
+        if (!self->_linkOk && self->_lastModulePacketMs == 0 &&
+            millis() > retryDeadlineMs) {
+            printf("[CRSF] No module response for %d ms - silent retry cycle\n",
+                   CRSF_RETRY_PERIOD_MS);
+            self->queueLog("CRSF: retrying link...");
+
+            // Go completely quiet so the module's parser can time out and resync
+            vTaskDelay(pdMS_TO_TICKS(CRSF_RETRY_SILENCE_MS));
+
+            // Drop any bytes collected during the silence and start clean
+            while (self->_serial.available()) self->_serial.read();
+            retryDeadlineMs = millis() + CRSF_RETRY_PERIOD_MS;
+        }
+
         vTaskDelay(pdMS_TO_TICKS(4)); // ~250Hz polling for responsive serial RX; frame rate is gated internally
     }
 }
@@ -476,6 +521,18 @@ void CRSF_Manager::processTelemetry() {
 // Log generation (state change detection)
 //=============================================================================
 
+// Queue a UI log message from any task. Messages are drained and pushed into
+// LVGL by updateUI(), which runs on the LVGL thread. NEVER call
+// ui_telemetry_add_log() from the CRSF task: LVGL is not thread-safe and the
+// race with the core-1 renderer corrupts memory (observed StoreProhibited).
+void CRSF_Manager::queueLog(const char* msg) {
+    if (!_logQueue) return;
+    char buf[CRSF_LOG_MSG_MAX];
+    strncpy(buf, msg, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    xQueueSend(_logQueue, buf, 0);  // Drop message if queue full
+}
+
 void CRSF_Manager::generateLogs() {
     CRSFTelemetry_t t;
     if (xSemaphoreTake(_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
@@ -487,17 +544,17 @@ void CRSF_Manager::generateLogs() {
 
     // Link up/down transitions
     if (t.link_up && !_prevLinkUp) {
-        ui_telemetry_add_log("CRSF: Link UP");
+        queueLog("CRSF: Link UP");
         printf("[CRSF] Link UP (connected to TX module)\n");
     } else if (!t.link_up && _prevLinkUp) {
-        ui_telemetry_add_log("CRSF: Link DOWN - reconnecting");
+        queueLog("CRSF: Link DOWN - reconnecting");
         printf("[CRSF] Link DOWN - sending bootstrap frames to reconnect...\n");
     }
     _prevLinkUp = t.link_up;
 
     // First attitude received
     if (t.attitude_valid && !_prevAttitudeValid) {
-        ui_telemetry_add_log("CRSF: IMU data received");
+        queueLog("CRSF: IMU data received");
         printf("[CRSF] First attitude data received\n");
     }
     _prevAttitudeValid = t.attitude_valid;
@@ -511,7 +568,7 @@ void CRSF_Manager::generateLogs() {
                      t.rssi_1, t.lq,
                      (unsigned long)t.frames_sent,
                      (unsigned long)t.frames_received);
-            ui_telemetry_add_log(buf);
+            queueLog(buf);
         }
     }
 }
@@ -522,6 +579,15 @@ void CRSF_Manager::generateLogs() {
 
 void CRSF_Manager::updateUI() {
     if (!_initialized) return;
+
+    // Drain queued log messages (produced by the CRSF task) into LVGL here,
+    // on the LVGL thread, where it is safe.
+    if (_logQueue) {
+        char msg[CRSF_LOG_MSG_MAX];
+        while (xQueueReceive(_logQueue, msg, 0) == pdTRUE) {
+            ui_telemetry_add_log(msg);
+        }
+    }
 
     CRSFTelemetry_t t = getTelemetry();
 
@@ -588,7 +654,8 @@ void CRSF_Init(void) {
         CRSF_TASK_CORE
     );
 
-    ui_telemetry_add_log("CRSF: Initialized");
+    // NOTE: not calling ui_telemetry_add_log here - CRSF_Init runs in
+    // DriverTask (core 0) and LVGL calls are only safe on the LVGL thread.
     printf("[CRSF] Task created on core %d, priority %d\n",
            CRSF_TASK_CORE, CRSF_TASK_PRIORITY);
 }
