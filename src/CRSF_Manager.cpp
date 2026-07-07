@@ -43,29 +43,21 @@ CRSF_Manager::CRSF_Manager()
 //=============================================================================
 
 bool CRSF_Manager::begin() {
-    uint32_t nowMs = millis();
-    if (nowMs < CRSF_BOOT_QUIET_MS) {
-        printf("[CRSF] Holding UART setup for %lu ms while ELRS module boots...\n",
-               (unsigned long)(CRSF_BOOT_QUIET_MS - nowMs));
-        vTaskDelay(pdMS_TO_TICKS(CRSF_BOOT_QUIET_MS - nowMs));
-    }
-
     printf("[CRSF] Initializing...\n");
     printf("[CRSF] TX Pin: %d, RX Pin: %d, OE Pin: %d\n",
            CRSF_UART_TX_PIN, CRSF_UART_RX_PIN, CRSF_OE_PIN);
     printf("[CRSF] Baud: %d, Frame rate: %d Hz\n", CRSF_BAUD, CRSF_DEFAULT_RATE_HZ);
 
-    // Clear any stale pad hold from previous experimental firmware/recovery
-    // so the UART RTS matrix can control OE during CRSF traffic.
+    // Clear any stale pad hold from previous experimental firmware/recovery.
     gpio_hold_dis((gpio_num_t)CRSF_OE_PIN);
 
-    // Configure OE pin for SN74LVC1G125 buffer control
-    // Active-low: HIGH = hi-Z (RX mode), LOW = output active (TX mode)
+    // Configure OE pin for active-high buffer control.
+    // LOW = hi-Z (RX mode), HIGH = output active (TX mode)
     pinMode(CRSF_OE_PIN, OUTPUT);
-    digitalWrite(CRSF_OE_PIN, HIGH);  // Default: RX mode
-    // Enable internal pull-up to ensure buffer stays tri-stated during boot/glitches
-    gpio_set_pull_mode((gpio_num_t)CRSF_OE_PIN, GPIO_PULLUP_ONLY);
-    printf("[CRSF] OE pin configured: HIGH (RX mode), pull-up enabled\n");
+    digitalWrite(CRSF_OE_PIN, LOW);  // Default: RX mode
+    // Enable internal pull-down to ensure buffer stays tri-stated during boot/glitches
+    gpio_set_pull_mode((gpio_num_t)CRSF_OE_PIN, GPIO_PULLDOWN_ONLY);
+    printf("[CRSF] OE pin configured: LOW (RX mode), pull-down enabled\n");
 
     // Initialize UART
     _serial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_UART_RX_PIN, CRSF_UART_TX_PIN);
@@ -76,14 +68,14 @@ bool CRSF_Manager::begin() {
     // The driver asserts RTS (pin HIGH) for the exact duration of each
     // transmission and releases it from the TX-done interrupt - immune to
     // task preemption, unlike software GPIO toggling.
-    // OE is active-low, so the RTS signal is routed to the pin INVERTED:
-    //   transmitting -> OE LOW (buffer drives bus)
-    //   idle         -> OE HIGH (buffer tri-state, RX listens)
+    // OE is active-high, so the RTS signal is routed to the pin directly:
+    //   transmitting -> OE HIGH (buffer drives bus)
+    //   idle         -> OE LOW (buffer tri-state, RX listens)
     uart_set_pin(UART_NUM_1, CRSF_UART_TX_PIN, CRSF_UART_RX_PIN,
                  CRSF_OE_PIN, UART_PIN_NO_CHANGE);
     uart_set_mode(UART_NUM_1, UART_MODE_RS485_HALF_DUPLEX);
-    esp_rom_gpio_connect_out_signal(CRSF_OE_PIN, U1RTS_OUT_IDX, true, false);
-    printf("[CRSF] Hardware half-duplex enabled (RS485 mode, inverted RTS on OE)\n");
+    esp_rom_gpio_connect_out_signal(CRSF_OE_PIN, U1RTS_OUT_IDX, false, false);
+    printf("[CRSF] Hardware half-duplex enabled (RS485 mode, direct RTS on OE)\n");
 #endif
 
     // Initialize CRSF library
@@ -102,7 +94,7 @@ bool CRSF_Manager::begin() {
     _initialized = true;
     printf("[CRSF] Initialized at %d baud, %d Hz frame rate\n",
            CRSF_BAUD, _frameRateHz);
-    printf("[CRSF] Half-duplex mode with SN74LVC1G125 buffer\n");
+    printf("[CRSF] Half-duplex mode with active-high tri-state buffer\n");
 
     return true;
 }
@@ -114,28 +106,19 @@ bool CRSF_Manager::begin() {
 void CRSF_Manager::taskFunc(void* param) {
     CRSF_Manager* self = static_cast<CRSF_Manager*>(param);
 
-    // Safety net only. begin() already waits before configuring Serial1, but
-    // keep this guard if CRSF_Init() is ever refactored to call begin earlier.
-    uint32_t nowMs = millis();
-    if (nowMs < CRSF_BOOT_QUIET_MS) {
-        printf("[CRSF] Waiting %lu ms for ELRS module boot...\n",
-               (unsigned long)(CRSF_BOOT_QUIET_MS - nowMs));
-        vTaskDelay(pdMS_TO_TICKS(CRSF_BOOT_QUIET_MS - nowMs));
-    }
-
-    // Flush any garbage received while the module was booting
-    while (self->_serial.available()) self->_serial.read();
-
     printf("[CRSF] Task started on core %d\n", xPortGetCoreID());
 
+#if CRSF_RETRY_ENABLED
     // Cold-boot recovery without resetting the MCU: if the module never
     // responds, periodically go silent so the module parser can time out and
     // resync, then start a clean CRSF stream again.
     uint32_t retryDeadlineMs = millis() + CRSF_RETRY_PERIOD_MS;
+#endif
 
     while (true) {
         self->update();
 
+#if CRSF_RETRY_ENABLED
         if (!self->_linkOk && self->_lastModulePacketMs == 0 &&
             millis() > retryDeadlineMs) {
             printf("[CRSF] No module response for %d ms - silent retry cycle\n",
@@ -149,6 +132,7 @@ void CRSF_Manager::taskFunc(void* param) {
             while (self->_serial.available()) self->_serial.read();
             retryDeadlineMs = millis() + CRSF_RETRY_PERIOD_MS;
         }
+#endif
 
         vTaskDelay(pdMS_TO_TICKS(4)); // ~250Hz polling for responsive serial RX; frame rate is gated internally
     }
@@ -164,13 +148,23 @@ void CRSF_Manager::update() {
     uint32_t nowUs = micros();
     uint32_t nowMs = millis();
 
-    // Always process incoming first (helps link detection)
+    // Always process incoming first. _linkOk is computed inside
+    // processTelemetry() with a post-parse timestamp (see comment there).
     processTelemetry();
 
-    // Detect link using echo-aware tracking: only genuine module packets
-    // (not our own echoed RC frames) prove the radio is actually responding
-    _linkOk = (_lastModulePacketMs != 0) &&
-              ((nowMs - _lastModulePacketMs) < CRSF_LINK_TIMEOUT_MS);
+    // Keepalive poll: the ELRS module doesn't stream telemetry to the handset
+    // unsolicited - the stock Lua script polls it every 1s. Keep polling while
+    // linked too, or link detection flaps at the CRSF_LINK_TIMEOUT_MS rhythm.
+    // Discovery ping (0x28) until the module is first seen, then the same
+    // ELRS status request (0x2D -> 0x2E reply) the Lua script sends.
+    if ((nowMs - _lastPingMs) >= CRSF_PING_INTERVAL_MS) {
+        _lastPingMs = nowMs;
+        if (_lastModulePacketMs == 0) {
+            sendDevicePing();
+        } else {
+            sendLinkStatRequest();
+        }
+    }
 
     if (_linkOk && RCInput.isReady()) {
         // Normal operation: send real RC data at full rate
@@ -187,12 +181,6 @@ void CRSF_Manager::update() {
             }
         }
     } else {
-        // Send device pings to provoke responses from newly-powered radio module
-        if ((nowMs - _lastPingMs) >= CRSF_PING_INTERVAL_MS) {
-            _lastPingMs = nowMs;
-            sendDevicePing();
-        }
-
         // Bootstrap: send center-value RC frames at low rate to wake up TX module.
         // ELRS TX modules will NOT transmit RF or bind unless they receive valid
         // CRSF RC frames from the handset. Without this, we deadlock:
@@ -360,7 +348,7 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
         printHexFrame("[CRSF]", frame, frameLen);
     }
 
-    // Half-duplex with hardware buffer (SN74LVC1G125DCKR):
+    // Half-duplex with active-high hardware buffer:
     // When using a tri-state buffer, we DON'T get echo - the buffer isolates TX from RX.
     // So no need to discard echo like in one-wire mode.
 #if CRSF_HW_HALF_DUPLEX
@@ -368,18 +356,13 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
     size_t written = _serial.write(frame, frameLen);
     _serial.flush();           // Wait for TX to finish (keeps frame pacing honest)
 #else
-    setOeMode(true);           // OE LOW = buffer enabled, TX drives line
-    delayMicroseconds(2);      // Let OE settle
+    setOeMode(true);           // OE HIGH = buffer enabled, TX drives line
+    delayMicroseconds(2);      // Let OE settle (same as working example)
 
     size_t written = _serial.write(frame, frameLen);
-    _serial.flush();           // Wait for TX FIFO to empty
-    
-    // ESP32-S3 UART: flush() returns when FIFO is empty, but shift register may still be sending.
-    // At 420000 baud, 26 bytes = 26 * 10 bits = 260 bits / 420000 = ~619us
-    // Add margin for the last byte to finish shifting out.
-    delayMicroseconds(30);     // Allow last byte to shift out
+    _serial.flush();           // Wait for TX to finish
 
-    setOeMode(false);          // OE HIGH = buffer tri-state, RX can receive
+    setOeMode(false);          // OE LOW = buffer tri-state, RX can receive
 #endif
     
     _frameDebugCount++;
@@ -429,16 +412,43 @@ void CRSF_Manager::sendDevicePing() {
     delayMicroseconds(2);
     _serial.write(frame, 6);
     _serial.flush();
-    delayMicroseconds(30);
+    setOeMode(false);
+#endif
+}
+
+void CRSF_Manager::sendLinkStatRequest() {
+    // ELRS status request - exactly what the stock ELRS Lua sends every 1s:
+    //   crossfireTelemetryPush(0x2D, { deviceId, handsetId, 0x0, 0x0 })
+    // Frame: [addr=0xEE][len=6][type=0x2D][dest=0xEE][origin=0xEF][0x00][0x00][crc]
+    // The module replies with an ELRS_STATUS frame (0x2E: bad/good + flags),
+    // which keeps the echo-aware link detection fed while connected.
+    uint8_t frame[8];
+    frame[0] = CRSF_ADDRESS_CRSF_TRANSMITTER;
+    frame[1] = 6;
+    frame[2] = CRSF_FRAMETYPE_ELRS_STATUS_REQ;
+    frame[3] = CRSF_ADDRESS_CRSF_TRANSMITTER;
+    frame[4] = CRSF_ADDRESS_ELRS_LUA;
+    frame[5] = 0x00;
+    frame[6] = 0x00;
+    frame[7] = _crc.calc(&frame[2], 5);
+
+#if CRSF_HW_HALF_DUPLEX
+    _serial.write(frame, sizeof(frame));
+    _serial.flush();
+#else
+    setOeMode(true);
+    delayMicroseconds(2);
+    _serial.write(frame, sizeof(frame));
+    _serial.flush();
     setOeMode(false);
 #endif
 }
 
 void CRSF_Manager::setOeMode(bool txMode) {
-    // SN74LVC1G125: OE is active-low
-    // LOW = buffer output active (TX drives bus)
-    // HIGH = buffer output hi-Z (RX listens)
-    digitalWrite(CRSF_OE_PIN, txMode ? LOW : HIGH);
+    // OE is active-high.
+    // HIGH = buffer output active (TX drives bus)
+    // LOW = buffer output hi-Z (RX listens)
+    digitalWrite(CRSF_OE_PIN, txMode ? HIGH : LOW);
 }
 
 void CRSF_Manager::discardEcho(size_t bytesSent) {
@@ -461,20 +471,21 @@ void CRSF_Manager::discardEcho(size_t bytesSent) {
 //=============================================================================
 
 void CRSF_Manager::processTelemetry() {
-    // Track good packets before/after to detect genuine module responses vs echo
-    uint32_t prevGood = _crsf.goodPackets();
     _crsf.update();
 
-    // Echo-aware link detection: on the half-duplex bus, our own RC frames (0x16)
-    // and pings (0x28) echo back and get parsed as valid packets. Only count
-    // frame types that the TX module actually sends (link stats, telemetry, etc.)
-    if (_crsf.goodPackets() > prevGood) {
-        uint8_t lastType = _crsf.lastValidPacketType();
-        if (lastType != CRSF_FRAMETYPE_RC_CHANNELS_PACKED &&
-            lastType != CRSF_FRAMETYPE_DEVICE_PING) {
-            _lastModulePacketMs = millis();
-        }
-    }
+    // Echo-aware link detection: the library tracks the last packet that could
+    // not be a local echo (per packet, inside the parser). Mirror it here for
+    // the retry logic in taskFunc.
+    _lastModulePacketMs = _crsf.lastModulePacketTimeMs();
+
+    // Compute link state with a timestamp captured AFTER parsing. The parser
+    // stamps packets with millis() DURING _crsf.update(); comparing against a
+    // timestamp captured before parsing let a fresh packet sit "in the
+    // future", so the unsigned subtraction wrapped to ~4e9 and dropped the
+    // link for one cycle (UP/DOWN log bombardment at the task rate).
+    uint32_t nowMs = millis();
+    _linkOk = (_lastModulePacketMs != 0) &&
+              ((nowMs - _lastModulePacketMs) < CRSF_LINK_TIMEOUT_MS);
 
     if (xSemaphoreTake(_telemetryMutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
 
@@ -548,7 +559,9 @@ void CRSF_Manager::generateLogs() {
         printf("[CRSF] Link UP (connected to TX module)\n");
     } else if (!t.link_up && _prevLinkUp) {
         queueLog("CRSF: Link DOWN - reconnecting");
-        printf("[CRSF] Link DOWN - sending bootstrap frames to reconnect...\n");
+        printf("[CRSF] Link DOWN (last module packet %lu ms ago, last rx type 0x%02X) - bootstrapping...\n",
+               (unsigned long)(millis() - _lastModulePacketMs),
+               _crsf.lastValidPacketType());
     }
     _prevLinkUp = t.link_up;
 

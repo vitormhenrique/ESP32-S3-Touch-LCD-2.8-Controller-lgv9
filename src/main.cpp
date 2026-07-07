@@ -72,7 +72,7 @@ void setup()
   // garbage at the ELRS module, sending its UART watchdog baud-cycling and
   // delaying (sometimes preventing) the bind until a reboot.
   pinMode(CRSF_OE_PIN, OUTPUT);
-  digitalWrite(CRSF_OE_PIN, HIGH);  // Active-low OE: HIGH = hi-Z
+  digitalWrite(CRSF_OE_PIN, LOW);  // Active-high OE: LOW = hi-Z
 
   // Flash_test();
   PWR_Init();

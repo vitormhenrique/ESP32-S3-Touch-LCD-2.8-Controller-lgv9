@@ -28,8 +28,11 @@
 // Set MCP_USE_INTERRUPT to 1 for interrupt-driven updates (lower latency,
 // less I2C traffic) or 0 for polling-only mode.
 //=============================================================================
-#define MCP_USE_INTERRUPT   1       // 1 = interrupt-driven, 0 = polling only
-#define MCP_INT_PIN         15      // ESP32 GPIO connected to MCP23017 INTA+INTB
+#define MCP_USE_INTERRUPT   0       // 1 = interrupt-driven, 0 = polling only.
+                                    // Forced to 0: GPIO15 (the only free INT-capable pin)
+                                    // is now used as CRSF UART TX. MCP is polled every
+                                    // MCP_INT_FALLBACK_MS instead.
+#define MCP_INT_PIN         15      // (unused when MCP_USE_INTERRUPT=0; pin repurposed for CRSF TX)
 #define MCP_INT_FALLBACK_MS 100     // Periodic fallback read interval (ms)
 
 // ADS1X15 addresses (ADDR pin: GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B)
@@ -260,7 +263,12 @@ typedef struct {
 //=============================================================================
 // CRSF UART Pin Assignments
 //=============================================================================
-#define CRSF_UART_TX_PIN    43      // ESP32-S3 GPIO for UART TX to ELRS module
-#define CRSF_UART_RX_PIN    44      // ESP32-S3 GPIO for UART RX from ELRS module
-#define CRSF_OE_PIN         18      // SN74LVC1G125 OE control (active-low, pull-up)
+#define CRSF_UART_TX_PIN    15      // ESP32-S3 GPIO for UART TX to ELRS module.
+                                    // MUST be a non-boot pin: GPIO43 (U0TXD) emits the
+                                    // ROM bootloader log on cold boot and wedges the ELRS
+                                    // module. GPIO15 is a clean spare (freed from MCP INT,
+                                    // which now runs in polling mode). Wire the tri-state
+                                    // buffer A input to the IO15 pad; leave TXD/43 unused.
+#define CRSF_UART_RX_PIN    44      // ESP32-S3 GPIO for UART RX from ELRS module (input only)
+#define CRSF_OE_PIN         18      // Tri-state buffer OE control (active-high, pull-down)
 

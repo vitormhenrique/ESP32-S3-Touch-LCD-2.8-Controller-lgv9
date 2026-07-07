@@ -4,6 +4,7 @@ AlfredoCRSF::AlfredoCRSF() :
     _crc(0xd5),
     _lastReceive(0), _lastChannelsPacket(0), _linkIsUp(false),
     _lastValidPacketMs(0), _lastValidPacketType(0),
+    _lastModulePacketMs(0),
     _goodPackets(0), _badPackets(0),
     _bytesRead(0), _lastByteMs(0)
 {
@@ -69,6 +70,16 @@ void AlfredoCRSF::handleByteReceived()
                     _goodPackets++;
                     _lastValidPacketMs = millis();
                     _lastValidPacketType = _rxBuf[2];
+                    // Echo-aware: on a half-duplex bus our own RC frames (0x16),
+                    // pings (0x28) and ELRS status requests (0x2D) echo back.
+                    // Anything else must have come from the module (device
+                    // info, link stats, ELRS status, telemetry...).
+                    if (_lastValidPacketType != CRSF_FRAMETYPE_RC_CHANNELS_PACKED &&
+                        _lastValidPacketType != 0x28 /* DEVICE_PING */ &&
+                        _lastValidPacketType != 0x2D /* ELRS status request */)
+                    {
+                        _lastModulePacketMs = _lastValidPacketMs;
+                    }
                     processPacketIn(len);
                     shiftRxBuffer(len + 2);
                     reprocess = true;

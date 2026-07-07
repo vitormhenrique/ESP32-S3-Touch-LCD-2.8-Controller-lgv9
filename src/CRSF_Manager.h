@@ -9,20 +9,22 @@
 // Configuration
 //=============================================================================
 
-#define CRSF_BAUD               400000
+#define CRSF_BAUD               420000  // CRSF handset standard (matches working example)
 #define CRSF_DEFAULT_RATE_HZ    50
-#define CRSF_BOOTSTRAP_RATE_HZ  50      // ELRS TX module UART watchdog re-evaluates good/bad
-                                        // packets every 1s and cycles baud rates when unhappy;
-                                        // a steady 50Hz stream locks it quickly and reliably.
-                                        // (Echo is no longer a concern with HW half-duplex.)
+#define CRSF_BOOTSTRAP_RATE_HZ  10      // Low-rate RC frames while waiting for link,
+                                        // same as the working example (TX_BOOTSTRAP_RATE_HZ)
 #define CRSF_LINK_TIMEOUT_MS    1000
 #define CRSF_LINK_DIAG_MS       2000    // Diagnostic log interval while waiting for link
-#define CRSF_PING_INTERVAL_MS   1000    // Device ping interval while waiting for link
+#define CRSF_PING_INTERVAL_MS   1000    // Continuous device ping keepalive (module only
+                                        // talks when polled, like the stock Lua script)
 #define CRSF_LOG_INTERVAL_MS    30000   // Periodic stats log every 30s
-#define CRSF_BOOT_QUIET_MS      15000   // Do not even configure the CRSF UART before this
-                                        // point after power-on. Some ELRS TX modules are still
-                                        // booting/autobauding at 5s and can wedge until the
-                                        // handset MCU is reset while the module stays powered.
+
+// Cold-boot recovery: if the module never responds, periodically go silent so
+// its parser can time out and resync, then restart a clean CRSF stream.
+// Set CRSF_RETRY_ENABLED to 0 (e.g. via build_flags) to disable.
+#ifndef CRSF_RETRY_ENABLED
+#define CRSF_RETRY_ENABLED      1
+#endif
 #define CRSF_RETRY_SILENCE_MS   3000    // If the module stays silent this long past a full retry
                                         // period, go quiet (mimics what a manual ESP32 reset does)
 #define CRSF_RETRY_PERIOD_MS    10000   // Module response deadline before each silent retry cycle
@@ -31,16 +33,18 @@
 #define CRSF_LOG_QUEUE_LEN      8
 #define CRSF_LOG_MSG_MAX        64
 
-// Hardware half-duplex: let UART1 drive the SN74LVC1G125 OE pin via the
-// RS485 half-duplex RTS signal (inverted through the GPIO matrix).
+// Hardware half-duplex: let UART1 drive the tri-state buffer OE pin via the
+// RS485 half-duplex RTS signal through the GPIO matrix.
 // The UART TX-done interrupt releases the bus, so OE timing is immune to
 // task preemption. Set to 0 to fall back to software GPIO toggling.
 #ifndef CRSF_HW_HALF_DUPLEX
-#define CRSF_HW_HALF_DUPLEX     1
+#define CRSF_HW_HALF_DUPLEX     0
 #endif
 
 // CRSF frame types not defined in AlfredoCRSF library
-#define CRSF_FRAMETYPE_DEVICE_PING  0x28
+#define CRSF_FRAMETYPE_DEVICE_PING      0x28
+#define CRSF_FRAMETYPE_ELRS_STATUS_REQ  0x2D    // ELRS status request (Lua: 0x2D -> 0x2E reply)
+#define CRSF_ADDRESS_ELRS_LUA           0xEF    // Handset Lua origin address (ELRS TX module)
 #define CRSF_TASK_STACK_SIZE    4096
 #define CRSF_TASK_PRIORITY      4
 #define CRSF_TASK_CORE          0
@@ -145,6 +149,7 @@ private:
     void sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNELS]);
     void sendBootstrapFrame();
     void sendDevicePing();
+    void sendLinkStatRequest();
     void setOeMode(bool txMode);
     void discardEcho(size_t bytesSent);
     void processTelemetry();

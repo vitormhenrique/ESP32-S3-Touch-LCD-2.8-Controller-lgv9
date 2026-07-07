@@ -34,6 +34,10 @@ public:
     // Debug/introspection helpers
     uint32_t lastValidPacketTimeMs() const { return _lastValidPacketMs; }
     uint8_t lastValidPacketType() const { return _lastValidPacketType; }
+    // Timestamp of the last valid packet that could NOT be a local echo of
+    // handset traffic (excludes RC_CHANNELS_PACKED 0x16 and DEVICE_PING 0x28).
+    // Tracked per packet, so echoed frames in the same parse batch can't mask it.
+    uint32_t lastModulePacketTimeMs() const { return _lastModulePacketMs; }
     uint32_t goodPackets() const { return _goodPackets; }
     uint32_t badPackets() const { return _badPackets; }
 
@@ -60,6 +64,7 @@ private:
 
     uint32_t _lastValidPacketMs;
     uint8_t _lastValidPacketType;
+    uint32_t _lastModulePacketMs;
     uint32_t _goodPackets;
     uint32_t _badPackets;
 
