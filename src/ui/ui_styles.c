@@ -141,21 +141,26 @@ void ui_styles_init(void)
     lv_style_set_text_color(&style_text_small, lv_color_hex(UI_COLOR_TEXT_TERTIARY));
     lv_style_set_text_font(&style_text_small, &lv_font_montserrat_10);
     
-    // Nav active
+    // Nav active - pill with translucent accent tint and soft glow
     lv_style_init(&style_nav_active);
-    lv_style_set_bg_color(&style_nav_active, lv_color_hex(UI_COLOR_NAV_ACTIVE));
-    lv_style_set_bg_opa(&style_nav_active, LV_OPA_COVER);
-    lv_style_set_radius(&style_nav_active, 4);
-    lv_style_set_border_width(&style_nav_active, 0);
-    lv_style_set_text_color(&style_nav_active, lv_color_hex(UI_COLOR_TEXT_PRIMARY));
+    lv_style_set_bg_color(&style_nav_active, lv_color_hex(UI_COLOR_ACCENT_BLUE));
+    lv_style_set_bg_opa(&style_nav_active, LV_OPA_20);
+    lv_style_set_radius(&style_nav_active, LV_RADIUS_CIRCLE);
+    lv_style_set_border_color(&style_nav_active, lv_color_hex(UI_COLOR_ACCENT_BLUE));
+    lv_style_set_border_width(&style_nav_active, 1);
+    lv_style_set_border_opa(&style_nav_active, LV_OPA_50);
+    lv_style_set_shadow_width(&style_nav_active, 8);
+    lv_style_set_shadow_color(&style_nav_active, lv_color_hex(UI_COLOR_ACCENT_BLUE));
+    lv_style_set_shadow_opa(&style_nav_active, LV_OPA_30);
+    lv_style_set_text_color(&style_nav_active, lv_color_hex(UI_COLOR_ACCENT_BLUE));
     
-    // Nav inactive
+    // Nav inactive - flat/transparent, muted text
     lv_style_init(&style_nav_inactive);
-    lv_style_set_bg_color(&style_nav_inactive, lv_color_hex(UI_COLOR_NAV_INACTIVE));
-    lv_style_set_bg_opa(&style_nav_inactive, LV_OPA_COVER);
-    lv_style_set_radius(&style_nav_inactive, 4);
-    lv_style_set_border_color(&style_nav_inactive, lv_color_hex(UI_COLOR_BORDER));
-    lv_style_set_border_width(&style_nav_inactive, 1);
+    lv_style_set_bg_color(&style_nav_inactive, lv_color_hex(UI_COLOR_BG_PANEL));
+    lv_style_set_bg_opa(&style_nav_inactive, LV_OPA_TRANSP);
+    lv_style_set_radius(&style_nav_inactive, LV_RADIUS_CIRCLE);
+    lv_style_set_border_width(&style_nav_inactive, 0);
+    lv_style_set_shadow_width(&style_nav_inactive, 0);
     lv_style_set_text_color(&style_nav_inactive, lv_color_hex(UI_COLOR_TEXT_SECONDARY));
     
     styles_initialized = true;
