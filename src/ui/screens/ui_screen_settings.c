@@ -147,9 +147,10 @@ static lv_obj_t* create_back_header(lv_obj_t *parent, const char *title) {
     lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
     
     lv_obj_t *back = lv_button_create(header);
-    lv_obj_set_size(back, 50, 22);
+    lv_obj_set_size(back, 56, 22);
     lv_obj_align(back, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_add_style(back, &style_card, 0);
+    lv_obj_set_style_radius(back, LV_RADIUS_CIRCLE, 0);
     lv_obj_add_event_cb(back, back_btn_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *back_lbl = lv_label_create(back);
@@ -160,7 +161,7 @@ static lv_obj_t* create_back_header(lv_obj_t *parent, const char *title) {
     lv_obj_t *title_lbl = lv_label_create(header);
     lv_label_set_text(title_lbl, title);
     lv_obj_add_style(title_lbl, &style_text_primary, 0);
-    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(title_lbl, LV_ALIGN_CENTER, 10, 0);
     
     return header;

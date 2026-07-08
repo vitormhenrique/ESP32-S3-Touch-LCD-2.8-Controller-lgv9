@@ -37,9 +37,9 @@ void ui_styles_init(void)
     lv_style_init(&style_card);
     lv_style_set_bg_color(&style_card, lv_color_hex(UI_COLOR_BG_CARD));
     lv_style_set_bg_opa(&style_card, LV_OPA_COVER);
-    lv_style_set_border_color(&style_card, lv_color_hex(UI_COLOR_BORDER_ACCENT));
+    lv_style_set_border_color(&style_card, lv_color_hex(UI_COLOR_BORDER));
     lv_style_set_border_width(&style_card, 1);
-    lv_style_set_radius(&style_card, 4);
+    lv_style_set_radius(&style_card, 8);
     lv_style_set_pad_all(&style_card, 2);
     
     // Gimbal background
@@ -47,8 +47,12 @@ void ui_styles_init(void)
     lv_style_set_bg_color(&style_gimbal_bg, lv_color_hex(UI_COLOR_BG_DARK));
     lv_style_set_bg_opa(&style_gimbal_bg, LV_OPA_COVER);
     lv_style_set_border_color(&style_gimbal_bg, lv_color_hex(UI_COLOR_ACCENT_BLUE));
-    lv_style_set_border_width(&style_gimbal_bg, 2);
-    lv_style_set_radius(&style_gimbal_bg, 6);
+    lv_style_set_border_width(&style_gimbal_bg, 1);
+    lv_style_set_border_opa(&style_gimbal_bg, LV_OPA_60);
+    lv_style_set_radius(&style_gimbal_bg, 12);
+    lv_style_set_shadow_width(&style_gimbal_bg, 10);
+    lv_style_set_shadow_color(&style_gimbal_bg, lv_color_hex(UI_COLOR_ACCENT_BLUE));
+    lv_style_set_shadow_opa(&style_gimbal_bg, LV_OPA_10);
     lv_style_set_pad_all(&style_gimbal_bg, 0);
     
     // Gimbal dot
@@ -65,7 +69,7 @@ void ui_styles_init(void)
     lv_style_init(&style_switch_off);
     lv_style_set_bg_color(&style_switch_off, lv_color_hex(UI_COLOR_SWITCH_OFF));
     lv_style_set_bg_opa(&style_switch_off, LV_OPA_COVER);
-    lv_style_set_radius(&style_switch_off, 3);
+    lv_style_set_radius(&style_switch_off, 6);
     lv_style_set_border_color(&style_switch_off, lv_color_hex(UI_COLOR_BORDER));
     lv_style_set_border_width(&style_switch_off, 1);
     
@@ -73,9 +77,9 @@ void ui_styles_init(void)
     lv_style_init(&style_switch_on);
     lv_style_set_bg_color(&style_switch_on, lv_color_hex(UI_COLOR_SWITCH_ON));
     lv_style_set_bg_opa(&style_switch_on, LV_OPA_COVER);
-    lv_style_set_radius(&style_switch_on, 3);
+    lv_style_set_radius(&style_switch_on, 6);
     lv_style_set_border_width(&style_switch_on, 0);
-    lv_style_set_shadow_width(&style_switch_on, 3);
+    lv_style_set_shadow_width(&style_switch_on, 6);
     lv_style_set_shadow_color(&style_switch_on, lv_color_hex(UI_COLOR_SWITCH_ON));
     lv_style_set_shadow_opa(&style_switch_on, LV_OPA_40);
     
@@ -85,7 +89,7 @@ void ui_styles_init(void)
     lv_style_set_bg_opa(&style_btn_default, LV_OPA_COVER);
     lv_style_set_border_color(&style_btn_default, lv_color_hex(UI_COLOR_BORDER_ACCENT));
     lv_style_set_border_width(&style_btn_default, 1);
-    lv_style_set_radius(&style_btn_default, 3);
+    lv_style_set_radius(&style_btn_default, 7);
     lv_style_set_pad_all(&style_btn_default, 2);
     
     // Button pressed
@@ -93,8 +97,8 @@ void ui_styles_init(void)
     lv_style_set_bg_color(&style_btn_pressed, lv_color_hex(UI_COLOR_ACCENT_BLUE));
     lv_style_set_bg_opa(&style_btn_pressed, LV_OPA_COVER);
     lv_style_set_border_width(&style_btn_pressed, 0);
-    lv_style_set_radius(&style_btn_pressed, 3);
-    lv_style_set_shadow_width(&style_btn_pressed, 4);
+    lv_style_set_radius(&style_btn_pressed, 7);
+    lv_style_set_shadow_width(&style_btn_pressed, 6);
     lv_style_set_shadow_color(&style_btn_pressed, lv_color_hex(UI_COLOR_ACCENT_BLUE));
     lv_style_set_shadow_opa(&style_btn_pressed, LV_OPA_50);
     
@@ -126,7 +130,10 @@ void ui_styles_init(void)
     lv_style_init(&style_bar_indicator);
     lv_style_set_bg_color(&style_bar_indicator, lv_color_hex(UI_COLOR_ACCENT_PURPLE));
     lv_style_set_bg_opa(&style_bar_indicator, LV_OPA_COVER);
-    lv_style_set_radius(&style_bar_indicator, 2);
+    lv_style_set_radius(&style_bar_indicator, 3);
+    lv_style_set_shadow_width(&style_bar_indicator, 4);
+    lv_style_set_shadow_color(&style_bar_indicator, lv_color_hex(UI_COLOR_ACCENT_PURPLE));
+    lv_style_set_shadow_opa(&style_bar_indicator, LV_OPA_30);
     
     // Text primary
     lv_style_init(&style_text_primary);

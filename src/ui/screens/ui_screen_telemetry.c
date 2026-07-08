@@ -52,8 +52,11 @@ static void update_page_indicator(void) {
     for (int i = 0; i < num_panels; i++) {
         if (page_dots[i]) {
             if (i == current_panel) {
+                // Active dot becomes an accent pill
+                lv_obj_set_size(page_dots[i], 16, 6);
                 lv_obj_set_style_bg_color(page_dots[i], lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
             } else {
+                lv_obj_set_size(page_dots[i], 6, 6);
                 lv_obj_set_style_bg_color(page_dots[i], lv_color_hex(UI_COLOR_BORDER), 0);
             }
         }
@@ -86,20 +89,40 @@ static void telemetry_scroll_event_cb(lv_event_t *e) {
 //=============================================================================
 
 static lv_obj_t *create_panel_base(const char *title) {
-    lv_obj_t *panel = lv_obj_create(panel_container);
-    lv_obj_set_size(panel, UI_SCREEN_WIDTH - 8, UI_CONTENT_HEIGHT - 20);
+    // Page wrapper is exactly one screen wide so every page (including the
+    // last) snaps perfectly centered
+    lv_obj_t *page = lv_obj_create(panel_container);
+    lv_obj_set_size(page, UI_SCREEN_WIDTH, lv_pct(100));
+    lv_obj_set_pos(page, num_panels * UI_SCREEN_WIDTH, 0);
+    lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(page, 0, 0);
+    lv_obj_set_style_pad_all(page, 0, 0);
+    lv_obj_remove_flag(page, LV_OBJ_FLAG_SCROLLABLE);
+    
+    lv_obj_t *panel = lv_obj_create(page);
+    lv_obj_set_size(panel, UI_SCREEN_WIDTH - 16, UI_CONTENT_HEIGHT - 24);
+    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, 6);  // breathing room below header
     lv_obj_set_style_bg_color(panel, lv_color_hex(UI_COLOR_BG_PANEL), 0);
-    lv_obj_set_style_border_width(panel, 0, 0);
-    lv_obj_set_style_radius(panel, 8, 0);
-    lv_obj_set_style_pad_all(panel, 6, 0);
+    lv_obj_set_style_border_width(panel, 1, 0);
+    lv_obj_set_style_border_color(panel, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_radius(panel, 12, 0);
+    lv_obj_set_style_pad_all(panel, 10, 0);
     lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     
-    // Title
+    // Title - top-left with accent tick
+    lv_obj_t *tick = lv_obj_create(panel);
+    lv_obj_set_size(tick, 3, 12);
+    lv_obj_align(tick, LV_ALIGN_TOP_LEFT, 0, 1);
+    lv_obj_set_style_bg_color(tick, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_set_style_radius(tick, 2, 0);
+    lv_obj_set_style_border_width(tick, 0, 0);
+    lv_obj_remove_flag(tick, LV_OBJ_FLAG_SCROLLABLE);
+    
     lv_obj_t *lbl = lv_label_create(panel);
     lv_label_set_text(lbl, title);
     lv_obj_add_style(lbl, &style_text_primary, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(lbl, LV_ALIGN_TOP_LEFT, 9, 0);
     
     return panel;
 }
@@ -108,20 +131,20 @@ static void create_status_panel(void) {
     lv_obj_t *panel = create_panel_base("Status");
     panels[num_panels++] = panel;
     
-    int y = 20;
+    int y = 26;
     int row_h = 22;
     
-    // Connection status icon
+    // Connection status - top-right, on the title row
     status_link_icon = lv_label_create(panel);
     lv_label_set_text(status_link_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(status_link_icon, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
-    lv_obj_align(status_link_icon, LV_ALIGN_TOP_LEFT, 0, y);
+    lv_obj_align(status_link_icon, LV_ALIGN_TOP_RIGHT, -70, 0);
     
     lv_obj_t *link_lbl = lv_label_create(panel);
     lv_label_set_text(link_lbl, "Connected");
     lv_obj_add_style(link_lbl, &style_text_primary, 0);
-    lv_obj_align(link_lbl, LV_ALIGN_TOP_LEFT, 22, y);
-    y += row_h + 4;
+    lv_obj_set_style_text_font(link_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(link_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
     
     // RSSI
     lv_obj_t *rssi_lbl = lv_label_create(panel);
@@ -189,7 +212,7 @@ static void create_log_panel(void) {
     
     // Create textarea for log
     log_textarea = lv_textarea_create(panel);
-    lv_obj_set_size(log_textarea, lv_pct(100), UI_CONTENT_HEIGHT - 50);
+    lv_obj_set_size(log_textarea, lv_pct(100), UI_CONTENT_HEIGHT - 68);
     lv_obj_align(log_textarea, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(log_textarea, lv_color_hex(UI_COLOR_BG_DARK), 0);
     lv_obj_set_style_text_color(log_textarea, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
@@ -221,17 +244,17 @@ static void create_imu9_panel(void) {
     lv_obj_t *lbl1 = lv_label_create(panel);
     lv_label_set_text(lbl1, "Euler: ---, ---, ---");
     lv_obj_add_style(lbl1, &style_text_primary, 0);
-    lv_obj_set_pos(lbl1, 5, 20);
+    lv_obj_set_pos(lbl1, 5, 26);
 
     lv_obj_t *lbl2 = lv_label_create(panel);
     lv_label_set_text(lbl2, "Cal:   ---, ---, ---");
     lv_obj_add_style(lbl2, &style_text_primary, 0);
-    lv_obj_set_pos(lbl2, 5, 40);
+    lv_obj_set_pos(lbl2, 5, 48);
 
     lv_obj_t *lbl3 = lv_label_create(panel);
     lv_label_set_text(lbl3, "Link:  ---, ---, ---");
     lv_obj_add_style(lbl3, &style_text_primary, 0);
-    lv_obj_set_pos(lbl3, 5, 60);
+    lv_obj_set_pos(lbl3, 5, 70);
 
     imu9_accel_label = lbl1;
     imu9_gyro_label = lbl2;
@@ -247,7 +270,7 @@ static void create_imu9_panel(void) {
 
 static void create_page_indicator(void) {
     page_indicator = lv_obj_create(ui_TelemetryScreen);
-    lv_obj_set_size(page_indicator, num_panels * 12, 8);
+    lv_obj_set_size(page_indicator, num_panels * 24, 10);
     lv_obj_align(page_indicator, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_set_style_bg_opa(page_indicator, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(page_indicator, 0, 0);
@@ -255,6 +278,7 @@ static void create_page_indicator(void) {
     lv_obj_remove_flag(page_indicator, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(page_indicator, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(page_indicator, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(page_indicator, 5, 0);
     
     for (int i = 0; i < num_panels; i++) {
         page_dots[i] = lv_obj_create(page_indicator);
@@ -283,13 +307,14 @@ void ui_create_telemetry_screen(lv_obj_t *parent) {
     lv_obj_add_flag(ui_TelemetryScreen, LV_OBJ_FLAG_HIDDEN);
     printf("Telemetry: Screen obj created\r\n");
     
-    // Main scrollable container
+    // Main scrollable container - no padding so pages align exactly to
+    // UI_SCREEN_WIDTH multiples (keeps panels centered when snapping)
     panel_container = lv_obj_create(ui_TelemetryScreen);
     lv_obj_set_size(panel_container, UI_SCREEN_WIDTH, UI_CONTENT_HEIGHT - 10);
     lv_obj_align(panel_container, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_bg_opa(panel_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(panel_container, 0, 0);
-    lv_obj_set_style_pad_all(panel_container, 4, 0);
+    lv_obj_set_style_pad_all(panel_container, 0, 0);
     printf("Telemetry: Panel container created\r\n");
     
     // Enable horizontal scrolling
@@ -342,13 +367,6 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
         
         // Always create IMU9 panel (will be shown/hidden based on profile)
         create_imu9_panel();
-        
-        // Position panels (initially position all)
-        for (int i = 0; i < num_panels; i++) {
-            if (panels[i]) {
-                lv_obj_set_pos(panels[i], i * UI_SCREEN_WIDTH + 4, 0);
-            }
-        }
         
         // Create page indicator
         create_page_indicator();
