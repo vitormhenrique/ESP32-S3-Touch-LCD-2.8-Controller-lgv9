@@ -35,12 +35,49 @@ typedef void (*ElrsMsgFn)(ElrsMsgLevel level, const char *text, void *user);
 typedef bool (*ElrsArmedFn)(void *user);
 
 //=============================================================================
+// TX module hardware profile
+//=============================================================================
+typedef enum {
+    ELRS_TX_FAMILY_UNKNOWN = 0,
+    ELRS_TX_FAMILY_HAPPYMODEL_ES24_PRO,
+    ELRS_TX_FAMILY_HAPPYMODEL_ES24_NON_PRO,
+    ELRS_TX_FAMILY_BETAFPV_MICRO_1W,
+    ELRS_TX_FAMILY_BETAFPV_MICRO_500MW,
+    ELRS_TX_FAMILY_BETAFPV_MICRO_UNKNOWN,
+    ELRS_TX_FAMILY_OTHER_ELRS_TX,
+} ElrsTxModuleFamily;
+
+typedef struct {
+    ElrsTxModuleFamily family;
+    char displayName[48];
+    char expectedConfiguratorCategory[32];
+    char expectedConfiguratorTarget[48];
+    char expectedFirmwareTarget[64];
+
+    uint16_t expectedPowerMw[8];
+    uint8_t expectedPowerCount;
+    uint16_t safeBenchPowerMw;
+    uint16_t safeFieldPowerMw;
+    uint16_t maxExpectedPowerMw;
+
+    uint8_t expectedMinInputVoltage;
+    uint8_t expectedMaxInputVoltage;
+
+    bool hasBackpackExpected;
+    bool hasFanExpected;
+    bool hasRgbExpected;
+    bool hasOledExpected;
+    bool hasFiveDButtonExpected;
+    bool hasDcdcExpected;
+} ElrsTxHardwareProfile;
+
+//=============================================================================
 // Safety classification for a parameter (derived from its NAME)
 //=============================================================================
 typedef struct {
     bool needs_disarm;      // blocked while armed
     bool needs_confirm;     // show confirmation dialog before writing
-    char warning[96];       // non-empty => show warning text with confirm
+    char warning[160];      // non-empty => show warning text with confirm
 } ElrsWriteSafety;
 
 //=============================================================================
@@ -98,8 +135,17 @@ bool elrs_service_is_armed(void);
  */
 bool elrs_service_set(const char *param_name, const char *option_text);
 
-/** Check whether the selected TX module is the expected ES24TX Pro. Emits a
- *  warning message if it is not (options are still used as discovered). */
+/** Classify the selected TX module from device info and discovered params. */
+const ElrsTxHardwareProfile *elrs_service_tx_profile(void);
+ElrsTxModuleFamily elrs_service_tx_family(void);
+const char *elrs_service_family_display_name(ElrsTxModuleFamily family);
+uint16_t elrs_service_discovered_max_power_mw(void);
+bool elrs_service_tx_feature_discovered(const char *feature_name);
+bool isPowerValueExpectedForFamily(ElrsTxModuleFamily family, uint16_t mw);
+bool isHighPowerForFamily(ElrsTxModuleFamily family, uint16_t mw);
+bool isDangerousUnsupportedPower(ElrsTxModuleFamily family, uint16_t mw);
+
+/** Check/classify the selected TX module. Emits warnings as needed. */
 void elrs_service_check_module(void);
 
 /** Apply a one-button profile (sequential verified writes with feedback). */

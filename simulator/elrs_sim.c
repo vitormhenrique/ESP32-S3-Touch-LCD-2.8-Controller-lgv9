@@ -34,7 +34,7 @@ typedef struct {
     uint32_t    cmd_auto_ms;  // when to auto-transition (0 = none)
 } SimParam;
 
-static SimParam tx_params[] = {
+static SimParam tx_params_happy[] = {
     // parent, type, name, options, value, unit, text
     { 0, CRSF_PT_TEXT_SELECTION, "Packet Rate",
       "50Hz;100Hz Full;150Hz;250Hz;333Hz Full;500Hz", 2, "Hz", NULL,
@@ -74,7 +74,77 @@ static SimParam tx_params[] = {
     { 0, CRSF_PT_TEXT_SELECTION | CRSF_PARAM_HIDDEN_BIT, "Telem Bandwidth",
       "Auto;Low;Med;High", 0, "", NULL, 0, "", 0 },
     { 0, CRSF_PT_INFO, "Bad/Good", NULL, 0, "", "0/250", 0, "", 0 },
+    { 0, CRSF_PT_INFO, "Target", NULL, 0, "",
+      "HappyModel_ES24TX_Pro_Series_2400_TX", 0, "", 0 },
     { 0, CRSF_PT_INFO, "master f00dbabe", NULL, 0, "", "", 0, "", 0 },
+};
+
+static SimParam tx_params_beta_1w[] = {
+    { 0, CRSF_PT_TEXT_SELECTION, "Packet Rate",
+      "50Hz;100Hz Full;150Hz;250Hz;333Hz Full;500Hz;F1000", 1, "Hz", NULL,
+      0, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "Telem Ratio",
+      "Std;Off;1:128;1:64;1:32;1:16;1:8;1:4;1:2;Race", 0, "", NULL,
+      0, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "Switch Mode",
+      "8ch;16ch Rate/2 Full Res;12ch Mixed", 1, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "Model Match",
+      "Off;On", 0, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_FOLDER, "TX Power", NULL, 0, "", NULL, 0, "", 0 },
+    { 5, CRSF_PT_TEXT_SELECTION, "Max Power",
+      "25;50;250;500;1000", 0, "mW", NULL, 0, "", 0 },
+    { 5, CRSF_PT_TEXT_SELECTION, "Dynamic",
+      "Off;Dyn;AUX9;AUX10;AUX11;AUX12", 0, "", NULL, 0, "", 0 },
+    { 5, CRSF_PT_TEXT_SELECTION, "Fan Thresh",
+      "25mW;50mW;250mW;500mW;1000mW", 2, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_FOLDER, "Backpack", NULL, 0, "", NULL, 0, "", 0 },
+    { 9, CRSF_PT_COMMAND, "Enable Backpack WiFi", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_FOLDER, "WiFi Connectivity", NULL, 0, "", NULL, 0, "", 0 },
+    { 11, CRSF_PT_COMMAND, "Enable WiFi", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_COMMAND, "BLE Joystick", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_COMMAND, "Bind", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "OLED Reversed",
+      "Off;On", 0, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_INFO, "5D Joystick ADC", NULL, 0, "", "present", 0, "", 0 },
+    { 0, CRSF_PT_INFO, "RGB LED", NULL, 0, "", "present", 0, "", 0 },
+    { 0, CRSF_PT_INFO, "Configurator Target", NULL, 0, "",
+      "BETAFPV 2.4GHz 1W Micro TX", 0, "", 0 },
+    { 0, CRSF_PT_INFO, "Target", NULL, 0, "",
+      "BETAFPV_2400_TX_MICRO_1000mW", 0, "", 0 },
+};
+
+static SimParam tx_params_beta_500[] = {
+    { 0, CRSF_PT_TEXT_SELECTION, "Packet Rate",
+      "50Hz;100Hz Full;150Hz;250Hz;333Hz Full;500Hz", 1, "Hz", NULL,
+      0, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "Telem Ratio",
+      "Std;Off;1:128;1:64;1:32;1:16;1:8;1:4;1:2;Race", 0, "", NULL,
+      0, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "Switch Mode",
+      "8ch;16ch Rate/2 Full Res;12ch Mixed", 1, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "Model Match",
+      "Off;On", 0, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_FOLDER, "TX Power", NULL, 0, "", NULL, 0, "", 0 },
+    { 5, CRSF_PT_TEXT_SELECTION, "Max Power",
+      "25;50;250;500", 0, "mW", NULL, 0, "", 0 },
+    { 5, CRSF_PT_TEXT_SELECTION, "Dynamic",
+      "Off;Dyn;AUX9;AUX10;AUX11;AUX12", 0, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_FOLDER, "WiFi Connectivity", NULL, 0, "", NULL, 0, "", 0 },
+    { 8, CRSF_PT_COMMAND, "Enable WiFi", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_COMMAND, "BLE Joystick", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_COMMAND, "Bind", NULL, 0, "", NULL,
+      CRSF_CMD_READY, "", 0 },
+    { 0, CRSF_PT_TEXT_SELECTION, "OLED Reversed",
+      "Off;On", 0, "", NULL, 0, "", 0 },
+    { 0, CRSF_PT_INFO, "5D Joystick ADC", NULL, 0, "", "present", 0, "", 0 },
+    { 0, CRSF_PT_INFO, "Configurator Target", NULL, 0, "",
+      "BETAFPV 2.4GHz Micro TX", 0, "", 0 },
 };
 
 static SimParam rx_params[] = {
@@ -103,7 +173,7 @@ typedef struct {
 
 static SimDevice devices[] = {
     { CRSF_ADDR_TX_MODULE, "HappyModel ES24TX Pro",
-      tx_params, (uint8_t)(sizeof(tx_params) / sizeof(tx_params[0])) },
+  tx_params_happy, (uint8_t)(sizeof(tx_params_happy) / sizeof(tx_params_happy[0])) },
     { CRSF_ADDR_RECEIVER, "ELRS 2400 RX",
       rx_params, (uint8_t)(sizeof(rx_params) / sizeof(rx_params[0])) },
 };
@@ -123,6 +193,38 @@ typedef struct {
 #define SIM_QUEUE_LEN 8
 static SimResponse queue[SIM_QUEUE_LEN];
 static uint32_t sim_now;
+
+void elrs_sim_reset(void)
+{
+  memset(queue, 0, sizeof(queue));
+  sim_now = 0;
+}
+
+void elrs_sim_select_tx_variant(ElrsSimTxVariant variant)
+{
+  elrs_sim_reset();
+  switch (variant) {
+  case ELRS_SIM_TX_BETAFPV_MICRO_1W:
+    devices[0].name = "BETAFPV 2400TX Micro 1000mw";
+    devices[0].params = tx_params_beta_1w;
+    devices[0].count = (uint8_t)(sizeof(tx_params_beta_1w) /
+                   sizeof(tx_params_beta_1w[0]));
+    break;
+  case ELRS_SIM_TX_BETAFPV_MICRO_500MW:
+    devices[0].name = "BETAFPV 2400TX Micro";
+    devices[0].params = tx_params_beta_500;
+    devices[0].count = (uint8_t)(sizeof(tx_params_beta_500) /
+                   sizeof(tx_params_beta_500[0]));
+    break;
+  case ELRS_SIM_TX_HAPPYMODEL_ES24_PRO:
+  default:
+    devices[0].name = "HappyModel ES24TX Pro";
+    devices[0].params = tx_params_happy;
+    devices[0].count = (uint8_t)(sizeof(tx_params_happy) /
+                   sizeof(tx_params_happy[0]));
+    break;
+  }
+}
 
 static void queue_response(uint8_t frame_type, const uint8_t *payload,
                            uint8_t len, uint32_t delay_ms)

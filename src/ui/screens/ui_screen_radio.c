@@ -14,6 +14,7 @@
 #include "../../elrs/elrs_service.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 //=============================================================================
 // State
@@ -48,6 +49,9 @@ static int32_t pending_value;
 
 static void rebuild_list(void);
 static void close_modal(void);
+
+#define SYNTH_TX_PROFILE   (-100)
+#define SYNTH_FW_NOTES     (-101)
 
 //=============================================================================
 // Toast messages
@@ -342,6 +346,135 @@ static void open_confirm_dialog(const char *title_txt, const char *body)
     lv_obj_t *yes = modal_button(panel, "Confirm", UI_COLOR_ACCENT_BLUE,
                                  confirm_yes_cb);
     lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, -4, 0);
+}
+
+//=============================================================================
+// Read-only help/profile pages
+//=============================================================================
+static void text_page_close_cb(lv_event_t *e)
+{
+    (void)e;
+    close_modal();
+}
+
+static void open_text_page(const char *title_txt, const char *body)
+{
+    close_modal();
+    lv_obj_t *panel = open_modal(292, 196);
+    lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(panel, LV_DIR_VER);
+
+    lv_obj_t *title = lv_label_create(panel);
+    lv_label_set_text(title, title_txt);
+    lv_obj_add_style(title, &style_text_primary, 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+
+    lv_obj_t *msg = lv_label_create(panel);
+    lv_label_set_text(msg, body);
+    lv_obj_add_style(msg, &style_text_secondary, 0);
+    lv_obj_set_width(msg, 260);
+    lv_label_set_long_mode(msg, LV_LABEL_LONG_WRAP);
+    lv_obj_align(msg, LV_ALIGN_TOP_LEFT, 4, 24);
+
+    lv_obj_t *close = modal_button(panel, "Close", UI_COLOR_BG_CARD,
+                                   text_page_close_cb);
+    lv_obj_align(close, LV_ALIGN_BOTTOM_MID, 0, 0);
+}
+
+static void append_line(char *buf, size_t len, const char *fmt, ...)
+{
+    size_t used = strlen(buf);
+    if (used >= len - 1) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(&buf[used], len - used, fmt, ap);
+    va_end(ap);
+}
+
+static void open_tx_profile_page(void)
+{
+    const ElrsDeviceInfo *dev =
+        elrs_client_device_by_addr(CRSF_ADDR_TX_MODULE);
+    const ElrsTxHardwareProfile *profile = elrs_service_tx_profile();
+    uint16_t discovered_max = elrs_service_discovered_max_power_mw();
+    bool beta = profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_1W ||
+                profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_500MW ||
+                profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_UNKNOWN;
+    char body[900] = "";
+    append_line(body, sizeof(body), "Detected family: %s\n",
+                elrs_service_family_display_name(profile->family));
+    append_line(body, sizeof(body), "Device name: %s\n",
+                dev ? dev->name : "unknown");
+    append_line(body, sizeof(body), "Configurator category: %s\n",
+                profile->expectedConfiguratorCategory[0] ?
+                profile->expectedConfiguratorCategory : "unknown");
+    append_line(body, sizeof(body), "Configurator target: %s\n",
+                profile->expectedConfiguratorTarget[0] ?
+                profile->expectedConfiguratorTarget : "unknown");
+    append_line(body, sizeof(body), "Target: %s\n",
+                profile->expectedFirmwareTarget[0] ?
+                profile->expectedFirmwareTarget : "discover from firmware");
+    append_line(body, sizeof(body), "Expected max power: %umW\n",
+                (unsigned)profile->maxExpectedPowerMw);
+    append_line(body, sizeof(body), "Power: discovered up to %umW\n",
+                (unsigned)discovered_max);
+    append_line(body, sizeof(body), "Input voltage note: %uV-%uV\n",
+                (unsigned)profile->expectedMinInputVoltage,
+                (unsigned)profile->expectedMaxInputVoltage);
+    append_line(body, sizeof(body), "Fan expected/discovered: %s/%s\n",
+                profile->hasFanExpected ? "yes" : "maybe/no",
+                elrs_service_tx_feature_discovered("fan") ? "yes" : "no");
+    append_line(body, sizeof(body), "Backpack expected/discovered: %s/%s\n",
+                profile->hasBackpackExpected ? "yes" : "maybe/no",
+                elrs_service_tx_feature_discovered("backpack") ? "yes" : "no");
+    append_line(body, sizeof(body), "OLED/5D expected/discovered: %s/%s\n",
+                (profile->hasOledExpected || profile->hasFiveDButtonExpected) ?
+                "yes" : "not expected",
+                (elrs_service_tx_feature_discovered("oled") ||
+                 elrs_service_tx_feature_discovered("5d")) ? "yes" : "no");
+    append_line(body, sizeof(body), "Module local UI: %s\n",
+                (profile->hasOledExpected || profile->hasFiveDButtonExpected) ?
+                "OLED/5D present" : "not expected");
+    append_line(body, sizeof(body), "CRSF baud: configured in controller\n");
+    if (beta) {
+        append_line(body, sizeof(body), "BETAFPV: do not use 3S+ on XT30\n");
+        append_line(body, sizeof(body), "BETAFPV local OLED menu may also change ELRS settings.\n");
+        append_line(body, sizeof(body), "If settings disagree, refresh parameters from TX module.\n");
+    } else if (profile->family == ELRS_TX_FAMILY_HAPPYMODEL_ES24_PRO) {
+        append_line(body, sizeof(body), "Use 5V-10V supply range. Install antenna before RF output.\n");
+    }
+    if (profile->family == ELRS_TX_FAMILY_UNKNOWN ||
+        profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_UNKNOWN ||
+        profile->family == ELRS_TX_FAMILY_OTHER_ELRS_TX) {
+        append_line(body, sizeof(body), "Family uncertain; using discovered options\n");
+    }
+    open_text_page("TX Module Profile", body);
+}
+
+static void open_fw_notes_page(void)
+{
+    const ElrsTxHardwareProfile *profile = elrs_service_tx_profile();
+    bool beta = profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_1W ||
+                profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_500MW ||
+                profile->family == ELRS_TX_FAMILY_BETAFPV_MICRO_UNKNOWN;
+    char body[900] = "";
+    append_line(body, sizeof(body), "Firmware flashing/build options are handled by ExpressLRS Configurator/WebUI.\n");
+    append_line(body, sizeof(body), "Binding Phrase, Regulatory Domain, Home WiFi credentials are build/WebUI settings unless exposed at runtime.\n\n");
+    if (beta) {
+        append_line(body, sizeof(body), "Configurator category: BETAFPV 2.4 GHz\n");
+        append_line(body, sizeof(body), "Device: BETAFPV 2.4GHz Micro TX or BETAFPV 2.4GHz 1W Micro TX\n");
+        append_line(body, sizeof(body), "Older modules may ship with BETAFPV-custom ELRS V2.0.0-style OLED/5D firmware.\n");
+        append_line(body, sizeof(body), "BETAFPV provides 2.5.1 and V3.3.0 module bins for Micro 500mW/1W.\n");
+        append_line(body, sizeof(body), "BETAFPV V3.3.0 notes external TX protocol baud may need 921K or higher for Lua/script access.\n");
+    } else {
+        append_line(body, sizeof(body), "Configurator category: Happymodel 2.4 GHz\n");
+        append_line(body, sizeof(body), "Device: HappyModel ES24 Pro 2.4GHz TX\n");
+        append_line(body, sizeof(body), "Target: HappyModel_ES24TX_Pro_Series_2400_TX\n");
+    }
+    append_line(body, sizeof(body), "If updating older/factory firmware to 3.x over WiFi, use 2.5.2 then Repartitioner before 3.x WiFi flash.\n");
+    append_line(body, sizeof(body), "UART/ETX passthrough update may not require that WiFi path.\n");
+    open_text_page("Firmware Target / Update Notes", body);
 }
 
 //=============================================================================
@@ -666,6 +799,15 @@ static void row_click_cb(lv_event_t *e)
 {
     int id = (int)(intptr_t)lv_event_get_user_data(e);
 
+    if (id == SYNTH_TX_PROFILE) {
+        open_tx_profile_page();
+        return;
+    }
+    if (id == SYNTH_FW_NOTES) {
+        open_fw_notes_page();
+        return;
+    }
+
     if (id == 0) {
         // back row: go up one folder level
         const ElrsParam *folder = elrs_client_param(current_folder);
@@ -759,6 +901,14 @@ static void rebuild_list(void)
         add_row(name, "", UI_COLOR_ACCENT_BLUE, true, 0);
     }
 
+    if (current_folder == 0 &&
+        elrs_client_selected_device() == CRSF_ADDR_TX_MODULE) {
+        add_row("TX Module Profile", LV_SYMBOL_RIGHT,
+                UI_COLOR_ACCENT_BLUE, true, SYNTH_TX_PROFILE);
+        add_row("Firmware Target / Update Notes", LV_SYMBOL_RIGHT,
+                UI_COLOR_ACCENT_BLUE, true, SYNTH_FW_NOTES);
+    }
+
     uint8_t count = elrs_client_param_count();
     for (uint8_t id = 1; id <= count; id++) {
         const ElrsParam *p = elrs_client_param(id);
@@ -814,8 +964,13 @@ static void client_event_cb(ElrsClientEvent ev, uint8_t arg, void *user)
         const ElrsDeviceInfo *dev =
             elrs_client_device_by_addr(elrs_client_selected_device());
         char buf[64];
-        snprintf(buf, sizeof(buf), "%s",
-                 dev ? dev->name : "Connected");
+        if (elrs_client_selected_device() == CRSF_ADDR_TX_MODULE) {
+            const ElrsTxHardwareProfile *profile = elrs_service_tx_profile();
+            snprintf(buf, sizeof(buf), "Detected: %s", profile->displayName);
+        } else {
+            snprintf(buf, sizeof(buf), "%s",
+                     dev ? dev->name : "Connected");
+        }
         update_status_label(buf);
         char toast_buf[64];
         snprintf(toast_buf, sizeof(toast_buf),

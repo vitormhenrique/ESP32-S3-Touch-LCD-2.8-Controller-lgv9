@@ -8,9 +8,18 @@
 
 #include <stdint.h>
 
+typedef enum {
+    ELRS_SIM_TX_HAPPYMODEL_ES24_PRO = 0,
+    ELRS_SIM_TX_BETAFPV_MICRO_1W,
+    ELRS_SIM_TX_BETAFPV_MICRO_500MW,
+} ElrsSimTxVariant;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void elrs_sim_select_tx_variant(ElrsSimTxVariant variant);
+void elrs_sim_reset(void);
 
 /** ElrsSendFn-compatible transport: give this to elrs_client_init(). */
 void elrs_sim_send_frame(uint8_t frame_type, const uint8_t *payload,
