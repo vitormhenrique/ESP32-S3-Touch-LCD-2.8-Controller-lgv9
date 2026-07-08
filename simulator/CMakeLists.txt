@@ -36,6 +36,7 @@ file(GLOB UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/components/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/screens/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs/*.c
 )
 
 # Simulator sources
@@ -44,6 +45,7 @@ set(SIM_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/hal_stubs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lv_drv_sdl.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Settings_stub.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/elrs_sim.c
 )
 
 add_executable(simulator
@@ -59,6 +61,7 @@ target_include_directories(simulator PRIVATE
     ${LVGL_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs
 )
 
 # Link SDL2 properly (use full library path on macOS)

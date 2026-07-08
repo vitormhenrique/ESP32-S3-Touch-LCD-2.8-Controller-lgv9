@@ -33,6 +33,17 @@
 #define CRSF_LOG_QUEUE_LEN      8
 #define CRSF_LOG_MSG_MAX        64
 
+// ELRS config protocol bridge: frames pass between the CRSF task (UART I/O)
+// and the LVGL thread (elrs_client state machine) through these queues.
+#define CRSF_ELRS_QUEUE_LEN     8
+#define CRSF_ELRS_FRAME_MAX     60
+
+typedef struct {
+    uint8_t type;
+    uint8_t len;
+    uint8_t payload[CRSF_ELRS_FRAME_MAX];
+} CRSFElrsFrame_t;
+
 // Hardware half-duplex: let UART1 drive the tri-state buffer OE pin via the
 // RS485 half-duplex RTS signal through the GPIO matrix.
 // The UART TX-done interrupt releases the bus, so OE timing is immune to
@@ -106,6 +117,11 @@ public:
     bool isReady() const { return _initialized; }
     bool isLinkUp() const { return _linkOk; }  // Lock-free read; used to gate low-priority work
 
+    // ELRS config protocol bridge (thread-safe):
+    // enqueue an extended frame for transmission on the CRSF bus (called from
+    // the LVGL thread via the elrs_client send callback).
+    bool elrsEnqueueTx(uint8_t frame_type, const uint8_t* payload, uint8_t len);
+
     // FreeRTOS task entry point (must be public for xTaskCreate)
     static void taskFunc(void* param);
 
@@ -144,6 +160,13 @@ private:
     QueueHandle_t _logQueue;
     void queueLog(const char* msg);
 
+    // ELRS config bridge queues (see elrsEnqueueTx / updateUI)
+    QueueHandle_t _elrsTxQueue;   // LVGL thread -> CRSF task (outgoing frames)
+    QueueHandle_t _elrsRxQueue;   // CRSF task -> LVGL thread (config replies)
+    static void rawFrameCb(uint8_t type, const uint8_t* payload,
+                           uint8_t len, void* user);
+    void sendElrsQueued();
+
     // Internal methods
     void gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]);
     void sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNELS]);
@@ -165,6 +188,10 @@ extern CRSF_Manager CRSFLink;
 extern "C" {
 #endif
 void CRSF_Init(void);
+// Initialize the ELRS config client with the CRSF UART transport.
+// Must be called on the main/LVGL thread BEFORE the UI is created
+// (elrs_client_init resets state, including UI-registered callbacks).
+void CRSF_ElrsClientInit(void);
 #ifdef __cplusplus
 }
 #endif

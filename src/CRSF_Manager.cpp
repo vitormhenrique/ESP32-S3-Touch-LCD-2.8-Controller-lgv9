@@ -1,6 +1,8 @@
 #include "CRSF_Manager.h"
 #include "InputManager.h"
 #include "ui/screens/ui_screen_telemetry.h"
+#include "elrs/elrs_client.h"
+#include "elrs/elrs_service.h"
 #include <cstring>
 #include <cmath>
 #include <driver/gpio.h>   // For gpio_set_pull_mode
@@ -35,6 +37,8 @@ CRSF_Manager::CRSF_Manager()
     , _lastLogMs(0)
     , _lastStatsLogMs(0)
     , _logQueue(nullptr)
+    , _elrsTxQueue(nullptr)
+    , _elrsRxQueue(nullptr)
 {
 }
 
@@ -90,6 +94,12 @@ bool CRSF_Manager::begin() {
 
     // Log queue: CRSF task -> LVGL thread (see queueLog)
     _logQueue = xQueueCreate(CRSF_LOG_QUEUE_LEN, CRSF_LOG_MSG_MAX);
+
+    // ELRS config bridge queues + raw frame capture (device info 0x29,
+    // parameter entries 0x2B are not decoded by AlfredoCRSF itself).
+    _elrsTxQueue = xQueueCreate(CRSF_ELRS_QUEUE_LEN, sizeof(CRSFElrsFrame_t));
+    _elrsRxQueue = xQueueCreate(CRSF_ELRS_QUEUE_LEN, sizeof(CRSFElrsFrame_t));
+    _crsf.setRawFrameCallback(rawFrameCb, this);
 
     _initialized = true;
     printf("[CRSF] Initialized at %d baud, %d Hz frame rate\n",
@@ -165,6 +175,10 @@ void CRSF_Manager::update() {
             sendLinkStatRequest();
         }
     }
+
+    // ELRS config frames queued by the UI (parameter reads/writes). One per
+    // cycle (4ms loop) so they interleave between RC frames without jitter.
+    sendElrsQueued();
 
     if (_linkOk && RCInput.isReady()) {
         // Normal operation: send real RC data at full rate
@@ -444,6 +458,65 @@ void CRSF_Manager::sendLinkStatRequest() {
 #endif
 }
 
+//=============================================================================
+// ELRS config protocol bridge
+//=============================================================================
+
+// Called on the LVGL thread (elrs_client send callback). Thread-safe: only
+// queues the frame; the CRSF task owns the UART.
+bool CRSF_Manager::elrsEnqueueTx(uint8_t frame_type, const uint8_t* payload, uint8_t len) {
+    if (!_elrsTxQueue || len > CRSF_ELRS_FRAME_MAX) return false;
+    CRSFElrsFrame_t f;
+    f.type = frame_type;
+    f.len = len;
+    memcpy(f.payload, payload, len);
+    return xQueueSend(_elrsTxQueue, &f, 0) == pdTRUE;
+}
+
+// CRSF task: transmit at most one queued config frame per update() cycle.
+void CRSF_Manager::sendElrsQueued() {
+    if (!_elrsTxQueue) return;
+    CRSFElrsFrame_t f;
+    if (xQueueReceive(_elrsTxQueue, &f, 0) != pdTRUE) return;
+
+    // Wire format: [bus addr][len][type][payload...][crc]
+    // Extended-frame payloads start with [dest][origin]; address the bus
+    // byte to the destination (0x00 broadcast pings, 0xEE TX module, 0xEC RX).
+    uint8_t frame[CRSF_ELRS_FRAME_MAX + 4];
+    frame[0] = (f.len >= 1) ? f.payload[0] : CRSF_ADDRESS_BROADCAST;
+    frame[1] = f.len + 2;  // type + payload + crc
+    frame[2] = f.type;
+    memcpy(&frame[3], f.payload, f.len);
+    frame[3 + f.len] = _crc.calc(&frame[2], f.len + 1);
+    size_t total = (size_t)f.len + 4;
+
+#if CRSF_HW_HALF_DUPLEX
+    _serial.write(frame, total);
+    _serial.flush();
+#else
+    setOeMode(true);
+    delayMicroseconds(2);
+    _serial.write(frame, total);
+    _serial.flush();
+    setOeMode(false);
+#endif
+}
+
+// CRSF task context (from AlfredoCRSF::processPacketIn). Forward config
+// protocol replies to the LVGL thread; everything else is decoded in-library.
+void CRSF_Manager::rawFrameCb(uint8_t type, const uint8_t* payload,
+                              uint8_t len, void* user) {
+    if (type != CRSF_FT_DEVICE_INFO && type != CRSF_FT_PARAM_SETTINGS_ENTRY)
+        return;
+    CRSF_Manager* self = static_cast<CRSF_Manager*>(user);
+    if (!self->_elrsRxQueue || len > CRSF_ELRS_FRAME_MAX) return;
+    CRSFElrsFrame_t f;
+    f.type = type;
+    f.len = len;
+    memcpy(f.payload, payload, len);
+    xQueueSend(self->_elrsRxQueue, &f, 0);  // drop if full; client retries
+}
+
 void CRSF_Manager::setOeMode(bool txMode) {
     // OE is active-high.
     // HIGH = buffer output active (TX drives bus)
@@ -602,6 +675,16 @@ void CRSF_Manager::updateUI() {
         }
     }
 
+    // Feed queued ELRS config replies into the client state machine here on
+    // the LVGL thread - the same thread that runs elrs_client_poll() and all
+    // other elrs_client_* calls (the client is single-threaded by design).
+    if (_elrsRxQueue) {
+        CRSFElrsFrame_t f;
+        while (xQueueReceive(_elrsRxQueue, &f, 0) == pdTRUE) {
+            elrs_client_on_frame(f.type, f.payload, f.len);
+        }
+    }
+
     CRSFTelemetry_t t = getTelemetry();
 
     // Status panel
@@ -671,4 +754,17 @@ void CRSF_Init(void) {
     // DriverTask (core 0) and LVGL calls are only safe on the LVGL thread.
     printf("[CRSF] Task created on core %d, priority %d\n",
            CRSF_TASK_CORE, CRSF_TASK_PRIORITY);
+}
+
+// Transport callback for the ELRS config client: runs on the LVGL thread,
+// hands the frame to the CRSF task via the TX queue.
+static void crsfElrsSendFn(uint8_t frame_type, const uint8_t* payload,
+                           uint8_t len, void* user) {
+    (void)user;
+    CRSFLink.elrsEnqueueTx(frame_type, payload, len);
+}
+
+void CRSF_ElrsClientInit(void) {
+    elrs_client_init(crsfElrsSendFn, nullptr);
+    elrs_service_set_baud(CRSF_BAUD);
 }

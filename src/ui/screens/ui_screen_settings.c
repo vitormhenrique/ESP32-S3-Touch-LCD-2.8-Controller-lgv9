@@ -1,5 +1,6 @@
 #include "ui_screen_settings.h"
 #include "ui_screen_telemetry.h"
+#include "ui_screen_radio.h"
 #include "../ui_styles.h"
 #include "../ui_helpers.h"
 #include "../components/ui_chrome.h"
@@ -229,58 +230,12 @@ static void create_radio_menu(lv_obj_t *parent) {
     lv_obj_set_style_border_width(menu_radio, 0, 0);
     lv_obj_set_style_pad_all(menu_radio, 4, 0);
     lv_obj_add_flag(menu_radio, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(menu_radio, LV_OBJ_FLAG_SCROLLABLE);
     
     create_back_header(menu_radio, "Radio (ELRS)");
     
-    const Settings_t *s = Settings_Get();
-    int y = 30;
-    
-    // Packet Rate
-    lv_obj_t *rate_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(rate_lbl, "Packet Rate:");
-    lv_obj_add_style(rate_lbl, &style_text_secondary, 0);
-    lv_obj_align(rate_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *rate_val = lv_label_create(menu_radio);
-    lv_label_set_text(rate_val, Settings_GetPacketRateName(s->radio.packet_rate));
-    lv_obj_add_style(rate_val, &style_text_primary, 0);
-    lv_obj_align(rate_val, LV_ALIGN_TOP_RIGHT, -4, y);
-    y += 22;
-    
-    // TX Power
-    lv_obj_t *pwr_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(pwr_lbl, "TX Power:");
-    lv_obj_add_style(pwr_lbl, &style_text_secondary, 0);
-    lv_obj_align(pwr_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *pwr_val = lv_label_create(menu_radio);
-    lv_label_set_text(pwr_val, Settings_GetTxPowerName(s->radio.tx_power));
-    lv_obj_add_style(pwr_val, &style_text_primary, 0);
-    lv_obj_align(pwr_val, LV_ALIGN_TOP_RIGHT, -4, y);
-    y += 22;
-    
-    // Telemetry
-    lv_obj_t *telem_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(telem_lbl, "Telemetry:");
-    lv_obj_add_style(telem_lbl, &style_text_secondary, 0);
-    lv_obj_align(telem_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *telem_val = lv_label_create(menu_radio);
-    lv_label_set_text(telem_val, Settings_GetTelemetryRatioName(s->radio.telemetry_ratio));
-    lv_obj_add_style(telem_val, &style_text_primary, 0);
-    lv_obj_align(telem_val, LV_ALIGN_TOP_RIGHT, -4, y);
-    y += 22;
-    
-    // Bind Phrase
-    lv_obj_t *bind_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(bind_lbl, "Bind Phrase:");
-    lv_obj_add_style(bind_lbl, &style_text_secondary, 0);
-    lv_obj_align(bind_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *bind_val = lv_label_create(menu_radio);
-    lv_label_set_text(bind_val, s->radio.bind_phrase);
-    lv_obj_add_style(bind_val, &style_text_primary, 0);
-    lv_obj_align(bind_val, LV_ALIGN_TOP_RIGHT, -4, y);
+    // Dynamic ExpressLRS configuration UI (discovered from the module)
+    ui_radio_menu_create(menu_radio);
 }
 
 static void create_robot_menu(lv_obj_t *parent) {
@@ -574,6 +529,7 @@ void ui_settings_show_menu(SettingsMenu_t menu) {
             break;
         case SETTINGS_MENU_RADIO:
             lv_obj_remove_flag(menu_radio, LV_OBJ_FLAG_HIDDEN);
+            ui_radio_on_show();
             break;
         case SETTINGS_MENU_ROBOT:
             lv_obj_remove_flag(menu_robot, LV_OBJ_FLAG_HIDDEN);

@@ -89,6 +89,10 @@ void setup()
   Settings_Init();  // Initialize settings (memory-only)
   // Note: Perf_Init moved to loop() to ensure CDC is ready
 
+  // ELRS config client must be initialized before the UI is created
+  // (the Radio screen registers callbacks that elrs_client_init would reset).
+  CRSF_ElrsClientInit();
+
   ui_custom_init();  // Use custom UI
 
   Driver_Loop();

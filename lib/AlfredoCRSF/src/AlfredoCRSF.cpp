@@ -6,7 +6,8 @@ AlfredoCRSF::AlfredoCRSF() :
     _lastValidPacketMs(0), _lastValidPacketType(0),
     _lastModulePacketMs(0),
     _goodPackets(0), _badPackets(0),
-    _bytesRead(0), _lastByteMs(0)
+    _bytesRead(0), _lastByteMs(0),
+    _rawCb(nullptr), _rawCbUser(nullptr)
 {
      
 }
@@ -71,12 +72,13 @@ void AlfredoCRSF::handleByteReceived()
                     _lastValidPacketMs = millis();
                     _lastValidPacketType = _rxBuf[2];
                     // Echo-aware: on a half-duplex bus our own RC frames (0x16),
-                    // pings (0x28) and ELRS status requests (0x2D) echo back.
-                    // Anything else must have come from the module (device
-                    // info, link stats, ELRS status, telemetry...).
+                    // pings (0x28), param reads (0x2C) and ELRS status requests
+                    // (0x2D) echo back. Anything else must have come from the
+                    // module (device info, link stats, ELRS status, telemetry...).
                     if (_lastValidPacketType != CRSF_FRAMETYPE_RC_CHANNELS_PACKED &&
                         _lastValidPacketType != 0x28 /* DEVICE_PING */ &&
-                        _lastValidPacketType != 0x2D /* ELRS status request */)
+                        _lastValidPacketType != 0x2C /* PARAMETER_READ */ &&
+                        _lastValidPacketType != 0x2D /* ELRS status request / param write */)
                     {
                         _lastModulePacketMs = _lastValidPacketMs;
                     }
@@ -114,6 +116,12 @@ void AlfredoCRSF::checkLinkDown()
 void AlfredoCRSF::processPacketIn(uint8_t len)
 {
     const crsf_header_t *hdr = (crsf_header_t *)_rxBuf;
+
+    // Raw frame hook: payload after type byte, excluding CRC.
+    // len = type + payload + crc, so payload_len = len - 2.
+    if (_rawCb && len >= 2)
+        _rawCb(hdr->type, &_rxBuf[3], len - 2, _rawCbUser);
+
     // Many CRSF deployments are effectively a bus. Depending on direction and device,
     // the destination address may vary. Decode common payload types regardless of
     // destination so applications can observe telemetry on the line.

@@ -6,6 +6,12 @@
 
 enum eFailsafeAction { fsaNoPulses, fsaHold };
 
+// Callback for raw valid frames the library doesn't decode itself
+// (e.g. config protocol: device info 0x29, parameter entries 0x2B).
+// payload points at the bytes after the type field, payload_len excludes CRC.
+typedef void (*CrsfRawFrameCb)(uint8_t frame_type, const uint8_t* payload,
+                               uint8_t payload_len, void* user);
+
 class AlfredoCRSF
 {
 public:
@@ -45,6 +51,10 @@ public:
     uint32_t bytesRead() const { return _bytesRead; }
     uint32_t lastByteTimeMs() const { return _lastByteMs; }
 
+    // Register a callback that receives every valid frame (called from the
+    // same context as update()). Used for the ELRS config protocol.
+    void setRawFrameCallback(CrsfRawFrameCb cb, void* user) { _rawCb = cb; _rawCbUser = user; }
+
 private:
     Stream* _port;
     uint8_t _rxBuf[CRSF_MAX_PACKET_LEN+3];
@@ -70,6 +80,9 @@ private:
 
     uint32_t _bytesRead;
     uint32_t _lastByteMs;
+
+    CrsfRawFrameCb _rawCb;
+    void* _rawCbUser;
 
     void handleSerialIn();
     void handleByteReceived();

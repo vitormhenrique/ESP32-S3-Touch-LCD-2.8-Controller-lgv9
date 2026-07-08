@@ -13,6 +13,8 @@
 #include "ui/ui.h"
 #include "ui/screens/ui_screen_settings.h"
 #include "Settings.h"
+#include "elrs_client.h"
+#include "elrs_sim.h"
 
 /* Simulator display/input driver declarations */
 void lv_sdl_display_init(void);
@@ -124,6 +126,9 @@ int main(int argc, char **argv)
     /* Initialize settings (stub) */
     Settings_Init();
     
+    /* Initialize ELRS client against the simulated ES24TX Pro module */
+    elrs_client_init(elrs_sim_send_frame, NULL);
+    
     /* Initialize UI */
     printf("Initializing UI...\n");
     fflush(stdout);
@@ -146,6 +151,9 @@ int main(int argc, char **argv)
         
         /* Update simulated gimbals for calibration */
         update_simulated_gimbals();
+        
+        /* Deliver simulated ELRS module responses */
+        elrs_sim_poll(SDL_GetTicks());
         
         /* Handle LVGL tasks */
         uint32_t time_till_next = lv_timer_handler();
