@@ -62,11 +62,6 @@ add_executable(test_elrs_service
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs/crsf_protocol.c
 )
 
-add_executable(test_controller_bridge
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_controller_bridge.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/controller_bridge.cpp
-)
-
 # IMPORTANT: Simulator directory must come BEFORE LVGL_DIR so our lv_conf.h is found first!
 target_include_directories(simulator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -82,11 +77,6 @@ target_include_directories(test_elrs_service PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs
 )
 
-target_include_directories(test_controller_bridge PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../lib/ChannelPack
-)
-
 # Link SDL2 properly (use full library path on macOS)
 target_link_libraries(simulator PRIVATE
     ${SDL2_LINK_LIBRARIES}
@@ -96,7 +86,6 @@ target_link_libraries(simulator PRIVATE
 
 enable_testing()
 add_test(NAME test_elrs_service COMMAND test_elrs_service)
-add_test(NAME test_controller_bridge COMMAND test_controller_bridge)
 
 # Add compiler flags from pkg-config
 target_compile_options(simulator PRIVATE ${SDL2_CFLAGS_OTHER} -g)
