@@ -8,11 +8,40 @@
 #include "Encoder_Driver.h"
 #include "Settings.h"
 #include "BAT_Driver.h"
+#include "InputSim.h"
 #include "ui/screens/ui_screen_settings.h"
 #include "CRSF_Manager.h"
 
 void ui_update_from_inputs(void)
 {
+#if UI_INPUT_SIM
+    //=========================================================================
+    // Simulated input mode: widgets are the input source; reflect sim state
+    //=========================================================================
+    const input_sim_state_t *sim = input_sim_get();
+
+    ui_set_status(true);
+
+    ui_set_gimbal_left(sim->gimbal[0], sim->gimbal[1]);
+    ui_set_gimbal_right(sim->gimbal[2], sim->gimbal[3]);
+
+    for (uint8_t i = 0; i < 6; i++) {
+        ui_set_switch(i, sim->sw[i]);
+    }
+    for (uint8_t i = 0; i < 4; i++) {
+        ui_set_button(i, sim->btn[i]);
+    }
+    ui_set_toggle3(0, sim->toggle3[0]);
+    ui_set_toggle3(1, sim->toggle3[1]);
+
+    // Not exposed for simulation - show defaults
+    ui_set_pot(0, 0);
+    ui_set_pot(1, 0);
+    ui_set_encoder(0, 0);
+    ui_set_encoder(1, 0);
+    ui_set_nav_switch(0, false, false, false, false, false);
+    ui_set_nav_switch(1, false, false, false, false, false);
+#else
     // Only update if InputManager is ready
     if (!RCInput.isReady()) {
         ui_set_status(false);  // Show disconnected icon
@@ -95,6 +124,7 @@ void ui_update_from_inputs(void)
     gimbal_raw[2] = RCInput.getGimbalRaw(GIMBAL_RIGHT_X);
     gimbal_raw[3] = RCInput.getGimbalRaw(GIMBAL_RIGHT_Y);
     ui_gimbal_cal_update(gimbal_raw);
+#endif // UI_INPUT_SIM
 
     //=========================================================================
     // Update battery voltage on top bar

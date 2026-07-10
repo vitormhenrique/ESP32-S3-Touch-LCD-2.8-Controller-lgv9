@@ -2,6 +2,7 @@
 #include "../ui_styles.h"
 #include "../components/ui_comp_gimbal.h"
 #include "../components/ui_comp_navswitch.h"
+#include "../../InputSim.h"
 #include <stdio.h>
 
 lv_obj_t *ui_InputScreen = NULL;
@@ -29,6 +30,119 @@ lv_obj_t *ui_PotValues[2] = {NULL};
 lv_obj_t *ui_EncPanels[2] = {NULL};
 lv_obj_t *ui_EncLabels[2] = {NULL};
 lv_obj_t *ui_EncValues[2] = {NULL};
+
+//=============================================================================
+// UI input simulation (compile with -DUI_INPUT_SIM=1)
+// Widgets become touch input sources; state lives in InputSim.c
+//=============================================================================
+
+#if UI_INPUT_SIM
+
+static void sim_set_gimbal_from_touch(lv_obj_t *gimbal, uint8_t axis_base)
+{
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) return;
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+
+    lv_area_t coords;
+    lv_obj_get_coords(gimbal, &coords);
+    int32_t half_w = (coords.x2 - coords.x1) / 2;
+    int32_t half_h = (coords.y2 - coords.y1) / 2;
+    if (half_w <= 0 || half_h <= 0) return;
+    int32_t cx = (coords.x1 + coords.x2) / 2;
+    int32_t cy = (coords.y1 + coords.y2) / 2;
+
+    input_sim_set_gimbal(axis_base + 0, (int16_t)(((p.x - cx) * 1000) / half_w));
+    input_sim_set_gimbal(axis_base + 1, (int16_t)((-(p.y - cy) * 1000) / half_h));
+}
+
+static void sim_input_event_cb(lv_event_t *e)
+{
+    lv_obj_t *target = lv_event_get_target(e);
+    lv_event_code_t code = lv_event_get_code(e);
+
+    for (uint8_t i = 0; i < 4; i++) {
+        if (target != ui_Buttons[i]) continue;
+        if (code == LV_EVENT_PRESSED) input_sim_set_button(i, true);
+        if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+            input_sim_set_button(i, false);
+        }
+        return;
+    }
+
+    if (code == LV_EVENT_CLICKED) {
+        for (uint8_t i = 0; i < 6; i++) {
+            if (target == ui_Switches[i]) {
+                input_sim_toggle_switch(i);
+                return;
+            }
+        }
+        for (uint8_t i = 0; i < 2; i++) {
+            if (target == ui_Toggle3Panels[i]) {
+                input_sim_cycle_toggle3(i);
+                return;
+            }
+        }
+    }
+
+    uint8_t axis_base;
+    if (target == ui_GimbalLeft) axis_base = 0;
+    else if (target == ui_GimbalRight) axis_base = 2;
+    else return;
+
+    if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) {
+        sim_set_gimbal_from_touch(target, axis_base);
+    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        input_sim_set_gimbal(axis_base + 0, 0);
+        input_sim_set_gimbal(axis_base + 1, 0);
+    }
+}
+
+static void sim_enable_bubbling_to_input_screen(lv_obj_t *obj)
+{
+    while (obj && obj != ui_InputScreen) {
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+        obj = lv_obj_get_parent(obj);
+    }
+}
+
+static void sim_attach_input_handlers(void)
+{
+    // One descriptor for all simulated controls. Per-widget descriptors caused
+    // LVGL heap exhaustion before the navigation bar was created.
+    lv_obj_add_event_cb(ui_InputScreen, sim_input_event_cb, LV_EVENT_ALL, NULL);
+
+    for (uint8_t i = 0; i < 4; i++) {
+        if (!ui_Buttons[i]) continue;
+        lv_obj_add_flag(ui_Buttons[i], LV_OBJ_FLAG_CLICKABLE);
+        sim_enable_bubbling_to_input_screen(ui_Buttons[i]);
+    }
+    for (uint8_t i = 0; i < 6; i++) {
+        if (!ui_Switches[i]) continue;
+        lv_obj_add_flag(ui_Switches[i], LV_OBJ_FLAG_CLICKABLE);
+        sim_enable_bubbling_to_input_screen(ui_Switches[i]);
+    }
+    for (uint8_t i = 0; i < 2; i++) {
+        if (!ui_Toggle3Panels[i]) continue;
+        lv_obj_add_flag(ui_Toggle3Panels[i], LV_OBJ_FLAG_CLICKABLE);
+        sim_enable_bubbling_to_input_screen(ui_Toggle3Panels[i]);
+    }
+    lv_obj_t *gimbals[] = {ui_GimbalLeft, ui_GimbalRight};
+    for (uint8_t i = 0; i < 2; i++) {
+        lv_obj_t *gimbal = gimbals[i];
+        if (!gimbal) continue;
+        lv_obj_add_flag(gimbal, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_flag(gimbal, LV_OBJ_FLAG_SCROLL_CHAIN);
+        uint32_t cnt = lv_obj_get_child_count(gimbal);
+        for (uint32_t child = 0; child < cnt; child++) {
+            lv_obj_remove_flag(lv_obj_get_child(gimbal, child), LV_OBJ_FLAG_CLICKABLE);
+        }
+        sim_enable_bubbling_to_input_screen(gimbal);
+    }
+}
+
+#endif // UI_INPUT_SIM
 
 //=============================================================================
 // Scroll event handler for snap behavior
@@ -316,6 +430,13 @@ void ui_create_input_screen(lv_obj_t *parent)
     // Create content
     create_page1_content(ui_InputPage1);
     create_page2_content(ui_InputPage2);
+}
+
+void ui_enable_input_simulation(void)
+{
+#if UI_INPUT_SIM
+    sim_attach_input_handlers();
+#endif
 }
 
 void ui_set_gimbal_left(int16_t x, int16_t y)

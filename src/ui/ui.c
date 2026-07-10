@@ -50,6 +50,10 @@ void ui_init(void)
     
     ui_create_nav_bar(ui_MainScreen);
     printf("UI: Nav bar created\r\n");
+
+    // Add optional touch-input handlers only after the complete UI has been
+    // allocated. This keeps simulation metadata from starving core widgets.
+    ui_enable_input_simulation();
     
     lv_screen_load(ui_MainScreen);
     printf("UI: Screen loaded\r\n");

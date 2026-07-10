@@ -263,7 +263,7 @@ typedef struct {
 //=============================================================================
 // CRSF UART Pin Assignments
 //=============================================================================
-#define CRSF_UART_TX_PIN    15      // ESP32-S3 GPIO for UART TX to ELRS module.
+#define CRSF_UART_TX_PIN    43      // ESP32-S3 GPIO for UART TX to ELRS module.
                                     // MUST be a non-boot pin: GPIO43 (U0TXD) emits the
                                     // ROM bootloader log on cold boot and wedges the ELRS
                                     // module. GPIO15 is a clean spare (freed from MCP INT,

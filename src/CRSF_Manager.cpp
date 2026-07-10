@@ -1,5 +1,6 @@
 #include "CRSF_Manager.h"
 #include "InputManager.h"
+#include "InputSim.h"
 #include "ui/screens/ui_screen_telemetry.h"
 #include "elrs/elrs_client.h"
 #include "elrs/elrs_service.h"
@@ -180,7 +181,13 @@ void CRSF_Manager::update() {
     // cycle (4ms loop) so they interleave between RC frames without jitter.
     sendElrsQueued();
 
-    if (_linkOk && RCInput.isReady()) {
+#if UI_INPUT_SIM
+    // Simulated input mode: hardware inputs are not required to transmit
+    const bool inputsReady = true;
+#else
+    const bool inputsReady = RCInput.isReady();
+#endif
+    if (_linkOk && inputsReady) {
         // Normal operation: send real RC data at full rate
         if ((nowUs - _lastFrameUs) >= _frameIntervalUs) {
             _lastFrameUs = nowUs;
@@ -248,6 +255,30 @@ void CRSF_Manager::gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]) 
     ChannelPackInputs_t inputs;
     memset(&inputs, 0, sizeof(inputs));
 
+#if UI_INPUT_SIM
+    //=========================================================================
+    // Simulated input mode: values come from the touch UI (InputSim).
+    // Channels not exposed in the UI keep default/neutral values:
+    // pots = 0, encoders = 0, nav = all false, switches[6..7] = false.
+    //=========================================================================
+    const input_sim_state_t *sim = input_sim_get();
+
+    inputs.gimbal[0] = sim->gimbal[0];
+    inputs.gimbal[1] = sim->gimbal[1];
+    inputs.gimbal[2] = sim->gimbal[2];
+    inputs.gimbal[3] = sim->gimbal[3];
+
+    for (int i = 0; i < 6; i++) {
+        inputs.switches[i] = sim->sw[i];
+    }
+
+    for (int i = 0; i < 4; i++) {
+        inputs.buttons[i] = sim->btn[i];
+    }
+
+    inputs.toggles[0] = sim->toggle3[0];
+    inputs.toggles[1] = sim->toggle3[1];
+#else
     // Gimbals
     inputs.gimbal[0] = RCInput.getLeftX();
     inputs.gimbal[1] = RCInput.getLeftY();
@@ -285,6 +316,7 @@ void CRSF_Manager::gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]) 
         inputs.nav[0][i] = RCInput.isSwitchOn(10 + i);  // NAV1 U,D,L,R,C
         inputs.nav[1][i] = RCInput.isSwitchOn(15 + i);  // NAV2 U,D,L,R,C
     }
+#endif // UI_INPUT_SIM
 
     ChannelPack::packInputs(&inputs, channels);
 }
