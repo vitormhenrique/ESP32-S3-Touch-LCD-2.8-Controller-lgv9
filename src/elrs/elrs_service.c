@@ -683,6 +683,33 @@ static bool add_first_available(ProfileStep *steps, int *n,
     return false;
 }
 
+// Switch Mode options that carry all 16 channels at full resolution, most
+// preferred first. The custom controller packs switches/buttons/nav into
+// CH9-11, so an 8ch mode (which only transmits CH1-8) silently drops them.
+// "16ch Rate/2 Full Res" is preferred over plain "16ch Rate/2" because some
+// module families expose both and the plain variant reduces aux resolution.
+static const char *const k_switch_mode_pref[] = {
+    "16ch Rate/2 Full Res",
+    "16ch Rate/2",
+};
+#define K_SWITCH_MODE_PREF_COUNT \
+    ((int)(sizeof(k_switch_mode_pref) / sizeof(k_switch_mode_pref[0])))
+
+// True if a Switch Mode option text is a 16-channel mode (normalized "16ch..").
+static bool switch_mode_is_16ch(const char *opt)
+{
+    char norm[48];
+    elrs_normalize_name(opt, norm, sizeof(norm));
+    return strncmp(norm, "16ch", 4) == 0;
+}
+
+// Queue the best available 16ch full-res Switch Mode.
+static bool add_switch_mode_16ch(ProfileStep *steps, int *n)
+{
+    return add_first_available(steps, n, "Switch Mode", k_switch_mode_pref,
+                               K_SWITCH_MODE_PREF_COUNT);
+}
+
 static void mw_to_option(uint16_t mw, char *buf, size_t len)
 {
     snprintf(buf, len, "%u", (unsigned)mw);
@@ -721,7 +748,7 @@ static bool build_profile_steps(ElrsProfile profile, ProfileStep *steps, int *n)
             return false;
         }
         add_step(steps, n, "Packet Rate", option_available("Packet Rate", "333Hz Full") ? "333Hz Full" : "100Hz Full");
-        add_step(steps, n, "Switch Mode", "16ch Rate/2");
+        add_switch_mode_16ch(steps, n);
         add_first_available(steps, n, "Telem Ratio", telem, (int)(sizeof(telem) / sizeof(telem[0])));
         add_step(steps, n, "Dynamic", "Dyn");
         add_step(steps, n, "Max Power", "1000");
@@ -736,7 +763,7 @@ static bool build_profile_steps(ElrsProfile profile, ProfileStep *steps, int *n)
     } else {
         add_step(steps, n, "Packet Rate", "100Hz Full");
     }
-    add_step(steps, n, "Switch Mode", "16ch Rate/2");
+    add_switch_mode_16ch(steps, n);
     add_first_available(steps, n, "Telem Ratio", telem, (int)(sizeof(telem) / sizeof(telem[0])));
 
     if (profile == ELRS_PROFILE_BENCH) {
@@ -867,9 +894,48 @@ bool elrs_service_apply_profile(ElrsProfile profile)
 
 bool elrs_service_profile_active(void) { return s.profile_active; }
 
+void elrs_service_enforce_switch_mode(void)
+{
+    if (s.profile_active) return;              // profile will set it itself
+    if (!elrs_client_params_ready()) return;
+
+    const ElrsParam *p = elrs_service_find("Switch Mode");
+    if (!p || p->type != CRSF_PT_TEXT_SELECTION) return;
+
+    char cur[48] = "";
+    if (p->value >= 0) elrs_param_option(p, p->value, cur, sizeof(cur));
+    if (switch_mode_is_16ch(cur)) return;      // already a 16ch mode
+
+    msg(ELRS_MSG_WARNING,
+        "Switch Mode '%s' drops CH9-16: robot loses SW_B..H, buttons, and nav. "
+        "A 16ch mode is required.", cur[0] ? cur : "?");
+
+    if (is_armed()) {
+        msg(ELRS_MSG_ERROR,
+            "Disarm to let the controller switch to 16ch Full Res.");
+        return;
+    }
+
+    for (int i = 0; i < K_SWITCH_MODE_PREF_COUNT; i++) {
+        int idx = elrs_service_find_option(p, k_switch_mode_pref[i]);
+        if (idx < 0) continue;
+        char opt[48] = "";
+        elrs_param_option(p, idx, opt, sizeof(opt));
+        msg(ELRS_MSG_INFO,
+            "Setting Switch Mode to %s (power-cycle the receiver to apply)...",
+            opt);
+        elrs_client_write_value(p->id, idx);
+        return;
+    }
+    msg(ELRS_MSG_ERROR, "This module offers no 16ch switch mode.");
+}
+
 void elrs_service_on_client_event(ElrsClientEvent ev, uint8_t arg)
 {
-    if (ev == ELRS_EV_PARAMS_LOADED) s.tx_profile_valid = false;
+    if (ev == ELRS_EV_PARAMS_LOADED) {
+        s.tx_profile_valid = false;
+        elrs_service_enforce_switch_mode();
+    }
 
     // feedback for individual writes
     const ElrsParam *p = elrs_client_param(arg);

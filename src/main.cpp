@@ -14,6 +14,7 @@
 #include "ui_custom_integration.h"
 #include "PerfMonitor.h"
 #include "CRSF_Manager.h"
+#include "RadioCli.h"
 
 void DriverTask(void *parameter) {
   // Start CRSF before input polling, but CRSF_Init deliberately waits before
@@ -67,6 +68,8 @@ void Driver_Loop() {
 }
 void setup()
 {
+  Serial.begin(115200);
+
   // Tri-state the CRSF half-duplex buffer IMMEDIATELY so the bus stays quiet
   // while the display/LVGL initialize. A floating OE during boot can spray
   // garbage at the ELRS module, sending its UART watchdog baud-cycling and
@@ -92,6 +95,7 @@ void setup()
   // ELRS config client must be initialized before the UI is created
   // (the Radio screen registers callbacks that elrs_client_init would reset).
   CRSF_ElrsClientInit();
+  RadioCli_Init();
 
   ui_custom_init();  // Use custom UI
 
@@ -109,6 +113,8 @@ void loop()
   }
   
   Perf_StartSection(PERF_COUNTER_MAIN_LOOP);
+
+  RadioCli_Poll();
   
   Perf_StartSection(PERF_COUNTER_LVGL_LOOP);
   uint32_t time_till_next = Lvgl_Loop();  // Returns ms until next handler should be called

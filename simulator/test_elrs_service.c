@@ -221,6 +221,62 @@ static void test_vendor_warnings(void)
     assert(!elrs_service_tx_profile()->hasOledExpected);
 }
 
+static void test_switch_mode_enforcement(void)
+{
+    // ES24 Pro offers "8ch;16ch Rate/2;12ch Mixed" (no Full Res variant).
+    load_variant(ELRS_SIM_TX_HAPPYMODEL_ES24_PRO, 921000);
+    const ElrsParam *sw = elrs_service_find("Switch Mode");
+    assert(sw != NULL);
+    int idx_8ch = elrs_service_find_option(sw, "8ch");
+    int idx_16ch = elrs_service_find_option(sw, "16ch Rate/2");
+    assert(idx_8ch >= 0 && idx_16ch >= 0);
+
+    // Force the module into 8ch, then let enforcement pull it back to 16ch.
+    assert(elrs_service_set("Switch Mode", "8ch"));
+    drive_ms(1200);
+    sw = elrs_service_find("Switch Mode");
+    assert(sw->value == idx_8ch);
+
+    reset_messages_only();
+    elrs_service_enforce_switch_mode();
+    drive_ms(1200);
+    sw = elrs_service_find("Switch Mode");
+    assert(sw->value == idx_16ch);   // pulled to the only 16ch option
+    assert(g_warn_count > 0);        // warned about dropped CH9-16
+
+    // Already 16ch: enforcement is a no-op (no extra write).
+    reset_messages_only();
+    int before = g_write_verified;
+    elrs_service_enforce_switch_mode();
+    drive_ms(600);
+    assert(g_write_verified == before);
+
+    // Armed: enforcement must not change RF settings.
+    assert(elrs_service_set("Switch Mode", "8ch"));
+    drive_ms(1200);
+    g_armed = true;
+    reset_messages_only();
+    before = g_write_verified;
+    elrs_service_enforce_switch_mode();
+    drive_ms(1200);
+    sw = elrs_service_find("Switch Mode");
+    assert(sw->value == idx_8ch);            // unchanged while armed
+    assert(g_write_verified == before);
+    g_armed = false;
+
+    // BETAFPV exposes the Full Res variant: enforcement must prefer it.
+    load_variant(ELRS_SIM_TX_BETAFPV_MICRO_1W, 921000);
+    sw = elrs_service_find("Switch Mode");
+    int idx_full = elrs_service_find_option(sw, "16ch Rate/2 Full Res");
+    assert(idx_full >= 0);
+    assert(elrs_service_set("Switch Mode", "8ch"));
+    drive_ms(1200);
+    elrs_service_enforce_switch_mode();
+    drive_ms(1200);
+    sw = elrs_service_find("Switch Mode");
+    assert(sw->value == idx_full);
+}
+
 static void test_baud_rate_warnings(void)
 {
     load_variant(ELRS_SIM_TX_BETAFPV_MICRO_1W, 400000);
@@ -250,6 +306,7 @@ int main(void)
     test_shared_protocol_writes_and_commands();
     test_power_safety();
     test_vendor_warnings();
+    test_switch_mode_enforcement();
     test_baud_rate_warnings();
     puts("ELRS service tests passed");
     return 0;

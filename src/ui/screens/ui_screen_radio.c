@@ -8,6 +8,7 @@
  * simulated ES24TX Pro in the desktop simulator.
  */
 #include "ui_screen_radio.h"
+#include "RadioCli.h"
 #include "../ui_helpers.h"
 #include "../ui_styles.h"
 #include "../../elrs/elrs_client.h"
@@ -942,6 +943,7 @@ static void client_event_cb(ElrsClientEvent ev, uint8_t arg, void *user)
 {
     (void)user;
     elrs_service_on_client_event(ev, arg);
+    RadioCli_OnElrsEvent(ev, arg);
 
     switch (ev) {
     case ELRS_EV_DEVICE_FOUND: {

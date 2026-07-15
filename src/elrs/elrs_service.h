@@ -152,6 +152,14 @@ void elrs_service_check_module(void);
 bool elrs_service_apply_profile(ElrsProfile profile);
 bool elrs_service_profile_active(void);
 
+/**
+ * Ensure the TX module is in a 16-channel switch mode. The custom controller
+ * packs switches/buttons/nav into CH9-11, which an "8ch" mode never transmits.
+ * Warns if the current mode is not 16ch and, when disarmed and no profile is
+ * running, writes the best available 16ch Full Res mode. Safe to call whenever
+ * parameters (re)load. */
+void elrs_service_enforce_switch_mode(void);
+
 /** Hook: must be called from the client event callback so the service can
  *  advance profile steps on write results. */
 void elrs_service_on_client_event(ElrsClientEvent ev, uint8_t arg);
