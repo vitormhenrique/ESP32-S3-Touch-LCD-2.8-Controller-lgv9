@@ -29,7 +29,7 @@ extern "C" {
 
 typedef struct {
     int16_t gimbal[4];   // -1000..+1000, order LX, LY, RX, RY (default 0)
-    bool    sw[6];       // SW_A..SW_H two-position switches (default off)
+    bool    sw[6];       // SW_A, SW_B, SW_C, SW_D, SW_G, SW_H (default off)
     bool    btn[4];      // BTN_1..BTN_4 momentary buttons (default released)
     uint8_t toggle3[2];  // SW_E/SW_F, 0=UP 1=CENTER 2=DOWN (default center)
 } input_sim_state_t;

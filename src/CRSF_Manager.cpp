@@ -441,9 +441,11 @@ void CRSF_Manager::sendBootstrapFrame() {
 void CRSF_Manager::sendDevicePing() {
     // Broadcast device ping to provoke a device info (0x29) response from TX module.
     // This helps detect when a freshly-powered radio module comes online.
-    // Frame: [addr=0x00][len=4][type=0x28][dest=0x00][origin=0xEA][crc]
+    // The outer address targets the local TX module; only the extended-frame
+    // destination is broadcast to discover every device behind that module.
+    // Frame: [addr=0xEE][len=4][type=0x28][dest=0x00][origin=0xEA][crc]
     uint8_t frame[6];
-    frame[0] = CRSF_ADDRESS_BROADCAST;
+    frame[0] = CRSF_ADDRESS_CRSF_TRANSMITTER;
     frame[1] = 4;
     frame[2] = CRSF_FRAMETYPE_DEVICE_PING;
     frame[3] = CRSF_ADDRESS_BROADCAST;
@@ -512,10 +514,10 @@ void CRSF_Manager::sendElrsQueued() {
     if (xQueueReceive(_elrsTxQueue, &f, 0) != pdTRUE) return;
 
     // Wire format: [bus addr][len][type][payload...][crc]
-    // Extended-frame payloads start with [dest][origin]; address the bus
-    // byte to the destination (0x00 broadcast pings, 0xEE TX module, 0xEC RX).
+    // Handset-originated config traffic always enters through the local TX
+    // module. Extended payload [dest][origin] routes it to TX/RX/broadcast.
     uint8_t frame[CRSF_ELRS_FRAME_MAX + 4];
-    frame[0] = (f.len >= 1) ? f.payload[0] : CRSF_ADDRESS_BROADCAST;
+    frame[0] = CRSF_ADDRESS_CRSF_TRANSMITTER;
     frame[1] = f.len + 2;  // type + payload + crc
     frame[2] = f.type;
     memcpy(&frame[3], f.payload, f.len);

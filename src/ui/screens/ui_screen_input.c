@@ -38,6 +38,15 @@ lv_obj_t *ui_EncValues[2] = {NULL};
 
 #if UI_INPUT_SIM
 
+static bool sim_target_inside(lv_obj_t *target, lv_obj_t *root)
+{
+    while (target) {
+        if (target == root) return true;
+        target = lv_obj_get_parent(target);
+    }
+    return false;
+}
+
 static void sim_set_gimbal_from_touch(lv_obj_t *gimbal, uint8_t axis_base)
 {
     lv_indev_t *indev = lv_indev_active();
@@ -63,7 +72,7 @@ static void sim_input_event_cb(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
 
     for (uint8_t i = 0; i < 4; i++) {
-        if (target != ui_Buttons[i]) continue;
+        if (!sim_target_inside(target, lv_obj_get_parent(ui_Buttons[i]))) continue;
         if (code == LV_EVENT_PRESSED) input_sim_set_button(i, true);
         if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
             input_sim_set_button(i, false);
@@ -73,13 +82,13 @@ static void sim_input_event_cb(lv_event_t *e)
 
     if (code == LV_EVENT_CLICKED) {
         for (uint8_t i = 0; i < 6; i++) {
-            if (target == ui_Switches[i]) {
+            if (sim_target_inside(target, lv_obj_get_parent(ui_Switches[i]))) {
                 input_sim_toggle_switch(i);
                 return;
             }
         }
         for (uint8_t i = 0; i < 2; i++) {
-            if (target == ui_Toggle3Panels[i]) {
+            if (sim_target_inside(target, lv_obj_get_parent(ui_Toggle3Panels[i]))) {
                 input_sim_cycle_toggle3(i);
                 return;
             }
@@ -115,16 +124,25 @@ static void sim_attach_input_handlers(void)
 
     for (uint8_t i = 0; i < 4; i++) {
         if (!ui_Buttons[i]) continue;
+        lv_obj_t *cont = lv_obj_get_parent(ui_Buttons[i]);
+        lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
+        sim_enable_bubbling_to_input_screen(cont);
         lv_obj_add_flag(ui_Buttons[i], LV_OBJ_FLAG_CLICKABLE);
         sim_enable_bubbling_to_input_screen(ui_Buttons[i]);
     }
     for (uint8_t i = 0; i < 6; i++) {
         if (!ui_Switches[i]) continue;
+        lv_obj_t *cont = lv_obj_get_parent(ui_Switches[i]);
+        lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
+        sim_enable_bubbling_to_input_screen(cont);
         lv_obj_add_flag(ui_Switches[i], LV_OBJ_FLAG_CLICKABLE);
         sim_enable_bubbling_to_input_screen(ui_Switches[i]);
     }
     for (uint8_t i = 0; i < 2; i++) {
         if (!ui_Toggle3Panels[i]) continue;
+        lv_obj_t *cont = lv_obj_get_parent(ui_Toggle3Panels[i]);
+        lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
+        sim_enable_bubbling_to_input_screen(cont);
         lv_obj_add_flag(ui_Toggle3Panels[i], LV_OBJ_FLAG_CLICKABLE);
         sim_enable_bubbling_to_input_screen(ui_Toggle3Panels[i]);
     }
@@ -183,10 +201,10 @@ static void create_page1_content(lv_obj_t *page)
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     // 4 Buttons
-    const char *btn_names[] = {"B1", "B2", "B3", "B4"};
+    const char *btn_names[] = {"BTN_1", "BTN_2", "BTN_3", "BTN_4"};
     for (int i = 0; i < 4; i++) {
         lv_obj_t *btn_cont = lv_obj_create(row);
-        lv_obj_set_size(btn_cont, 34, INPUT_PANEL_HEIGHT - 12);
+        lv_obj_set_size(btn_cont, 38, INPUT_PANEL_HEIGHT - 12);
         lv_obj_set_style_bg_opa(btn_cont, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(btn_cont, 0, 0);
         lv_obj_set_style_pad_all(btn_cont, 0, 0);
@@ -205,10 +223,10 @@ static void create_page1_content(lv_obj_t *page)
     }
     
     // 2 Three-position toggles
-    const char *toggle_names[] = {"T1", "T2"};
+    const char *toggle_names[] = {"SW_E", "SW_F"};
     for (int i = 0; i < 2; i++) {
         lv_obj_t *toggle_cont = lv_obj_create(row);
-        lv_obj_set_size(toggle_cont, 24, INPUT_PANEL_HEIGHT - 12);
+        lv_obj_set_size(toggle_cont, 30, INPUT_PANEL_HEIGHT - 12);
         lv_obj_set_style_bg_opa(toggle_cont, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(toggle_cont, 0, 0);
         lv_obj_set_style_pad_all(toggle_cont, 0, 0);
@@ -233,7 +251,7 @@ static void create_page1_content(lv_obj_t *page)
     }
     
     // 3 Switches on page 1
-    const char *sw_names[] = {"S1", "S2", "S3"};
+    const char *sw_names[] = {"SW_A", "SW_B", "SW_C"};
     for (int i = 0; i < 3; i++) {
         lv_obj_t *sw_cont = lv_obj_create(row);
         lv_obj_set_size(sw_cont, 32, INPUT_PANEL_HEIGHT - 12);
@@ -272,7 +290,7 @@ static void create_page2_content(lv_obj_t *page)
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     // 3 more switches
-    const char *sw_names[] = {"S4", "S5", "S6"};
+    const char *sw_names[] = {"SW_D", "SW_G", "SW_H"};
     for (int i = 0; i < 3; i++) {
         lv_obj_t *sw_cont = lv_obj_create(row);
         lv_obj_set_size(sw_cont, 32, INPUT_PANEL_HEIGHT - 12);
@@ -294,7 +312,7 @@ static void create_page2_content(lv_obj_t *page)
     }
     
     // 2 Potentiometers (vertical layout)
-    const char *pot_names[] = {"P1", "P2"};
+    const char *pot_names[] = {"POT_1", "POT_2"};
     for (int i = 0; i < 2; i++) {
         lv_obj_t *pot_cont = lv_obj_create(row);
         lv_obj_set_size(pot_cont, 50, INPUT_PANEL_HEIGHT - 12);
@@ -322,7 +340,7 @@ static void create_page2_content(lv_obj_t *page)
     }
     
     // 2 Encoders
-    const char *enc_names[] = {"E1", "E2"};
+    const char *enc_names[] = {"ENC_1", "ENC_2"};
     for (int i = 0; i < 2; i++) {
         lv_obj_t *enc_cont = lv_obj_create(row);
         lv_obj_set_size(enc_cont, 50, INPUT_PANEL_HEIGHT - 12);

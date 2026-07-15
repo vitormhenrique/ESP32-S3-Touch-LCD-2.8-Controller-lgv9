@@ -28,7 +28,7 @@
 // Set MCP_USE_INTERRUPT to 1 for interrupt-driven updates (lower latency,
 // less I2C traffic) or 0 for polling-only mode.
 //=============================================================================
-#define MCP_USE_INTERRUPT   0       // 1 = interrupt-driven, 0 = polling only.
+#define MCP_USE_INTERRUPT   1       // 1 = interrupt-driven, 0 = polling only.
                                     // Forced to 0: GPIO15 (the only free INT-capable pin)
                                     // is now used as CRSF UART TX. MCP is polled every
                                     // MCP_INT_FALLBACK_MS instead.
