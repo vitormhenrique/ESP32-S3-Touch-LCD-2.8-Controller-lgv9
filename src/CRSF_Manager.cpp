@@ -322,25 +322,8 @@ void CRSF_Manager::gatherAndPackChannels(uint16_t channels[CPACK_NUM_CHANNELS]) 
 }
 
 //=============================================================================
-// Debug helpers
-//=============================================================================
-
-static void printHexFrame(const char* label, const uint8_t* data, size_t len) {
-    printf("%s HEX [%d]: ", label, (int)len);
-    for (size_t i = 0; i < len; i++) {
-        printf("%02X ", data[i]);
-    }
-    printf("\n");
-}
-
-//=============================================================================
 // CRSF frame building & sending (half-duplex)
 //=============================================================================
-
-// Debug: Print first frame and then periodically
-static uint32_t _lastFrameDebugMs = 0;
-static uint32_t _frameDebugCount = 0;
-#define FRAME_DEBUG_INTERVAL_MS 5000  // Print frame every 5 seconds
 
 void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNELS]) {
     // Bit-pack 16 x 11-bit channels into 22-byte payload (LSB-first)
@@ -378,22 +361,6 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
 
     size_t frameLen = 26;
 
-    // Debug: Print frame periodically
-    uint32_t nowMs = millis();
-    bool printDebug = (_frameDebugCount == 0) || 
-                      (nowMs - _lastFrameDebugMs >= FRAME_DEBUG_INTERVAL_MS);
-    
-    if (printDebug) {
-        _lastFrameDebugMs = nowMs;
-        printf("[CRSF] --- Frame #%lu ---\n", (unsigned long)_frameDebugCount);
-        printf("[CRSF] Channels: ");
-        for (int i = 0; i < 8; i++) {
-            printf("%d ", channels[i]);
-        }
-        printf("...\n");
-        printHexFrame("[CRSF]", frame, frameLen);
-    }
-
     // Half-duplex with active-high hardware buffer:
     // When using a tri-state buffer, we DON'T get echo - the buffer isolates TX from RX.
     // So no need to discard echo like in one-wire mode.
@@ -410,17 +377,6 @@ void CRSF_Manager::sendRcChannelsPacked(const uint16_t channels[CPACK_NUM_CHANNE
 
     setOeMode(false);          // OE LOW = buffer tri-state, RX can receive
 #endif
-    
-    _frameDebugCount++;
-    
-    // Debug: Log write result
-    if (printDebug) {
-        printf("[CRSF] write() returned %d/%d bytes\n", (int)written, (int)frameLen);
-        printf("[CRSF] UART RX bytes: %lu, good: %lu, bad: %lu\n",
-               (unsigned long)_crsf.bytesRead(),
-               (unsigned long)_crsf.goodPackets(),
-               (unsigned long)_crsf.badPackets());
-    }
     
     // Warning if write failed
     if (written != frameLen) {

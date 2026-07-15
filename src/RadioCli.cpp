@@ -98,7 +98,6 @@ void RadioCli_Poll()
     if (!discovery_started && millis() > 3000) {
         discovery_started = true;
         elrs_client_select_device(CRSF_ADDR_TX_MODULE);
-        Serial.println("RADIO TX discovery requested");
     }
 
     while (Serial.available() > 0) {
@@ -123,8 +122,6 @@ void RadioCli_OnElrsEvent(ElrsClientEvent event, uint8_t parameter_id)
 {
     if (event == ELRS_EV_PARAMS_LOADED &&
         elrs_client_selected_device() == CRSF_ADDR_TX_MODULE) {
-        Serial.println("RADIO TX parameters loaded");
-        print_switch_mode();
     }
     if (parameter_id != pending_write_id) return;
     if (event == ELRS_EV_WRITE_VERIFIED) {
