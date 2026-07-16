@@ -28,6 +28,9 @@ void DriverTask(void *parameter) {
   // Load saved gimbal calibrations from Settings
   ui_load_gimbal_calibrations();
 
+  // Load saved pot calibrations from Settings
+  ui_load_pot_calibrations();
+
   // Until the ELRS link is up, inputs/telemetry are useless - poll slowly to
   // keep the I2C bus and core 0 quiet while the CRSF task establishes the
   // link. Once linked, switch to the normal 50Hz polling permanently.

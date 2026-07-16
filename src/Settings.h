@@ -49,6 +49,17 @@ typedef struct {
 } GimbalCalibration_t;
 
 //=============================================================================
+// Potentiometer Calibration Data (per pot)
+//=============================================================================
+
+typedef struct {
+    int16_t min_raw;        // Raw ADC value at minimum position
+    int16_t max_raw;        // Raw ADC value at maximum position
+    bool inverted;          // True to invert direction (min recorded > max)
+    bool calibrated;        // True if calibration has been performed
+} PotCalibration_t;
+
+//=============================================================================
 // Radio Settings (ExpressLRS)
 //=============================================================================
 
@@ -82,6 +93,9 @@ typedef struct {
     // Gimbal calibrations (4 axes)
     GimbalCalibration_t gimbal_cal[4];
     
+    // Potentiometer calibrations (2 pots)
+    PotCalibration_t pot_cal[2];
+    
     // Radio settings
     RadioSettings_t radio;
     
@@ -109,6 +123,7 @@ void Settings_ResetToDefaults(void);
 void Settings_SetRobotProfile(RobotProfile_t profile);
 void Settings_SetTouchCalibration(const TouchCalibration_t* cal);
 void Settings_SetGimbalCalibration(uint8_t axis, const GimbalCalibration_t* cal);
+void Settings_SetPotCalibration(uint8_t pot, const PotCalibration_t* cal);
 void Settings_SetRadio(const RadioSettings_t* radio);
 void Settings_SetDisplayBrightness(uint8_t brightness);
 

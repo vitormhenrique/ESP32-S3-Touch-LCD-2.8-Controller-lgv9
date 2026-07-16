@@ -196,8 +196,8 @@ public:
     /**
      * Calibrate a potentiometer
      */
-    void calibratePot(uint8_t index, int16_t min_val, int16_t max_val) {
-        AnalogInput.calibratePotentiometer(index, min_val, max_val);
+    void calibratePot(uint8_t index, int16_t min_val, int16_t max_val, bool inverted = false) {
+        AnalogInput.calibratePotentiometer(index, min_val, max_val, inverted);
     }
     
     //=========================================================================

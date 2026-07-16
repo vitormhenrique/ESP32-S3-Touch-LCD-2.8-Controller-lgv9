@@ -124,6 +124,14 @@ void ui_update_from_inputs(void)
     gimbal_raw[2] = RCInput.getGimbalRaw(GIMBAL_RIGHT_X);
     gimbal_raw[3] = RCInput.getGimbalRaw(GIMBAL_RIGHT_Y);
     ui_gimbal_cal_update(gimbal_raw);
+
+    //=========================================================================
+    // Update Pot Calibration Display
+    //=========================================================================
+    int16_t pot_raw[2];
+    pot_raw[0] = RCInput.getPotRaw(POT_1);
+    pot_raw[1] = RCInput.getPotRaw(POT_2);
+    ui_pot_cal_update(pot_raw);
 #endif // UI_INPUT_SIM
 
     //=========================================================================
@@ -179,6 +187,34 @@ void ui_load_gimbal_calibrations(void)
             RCInput.calibrateGimbal(i, cal->min_raw, cal->center_raw, cal->max_raw, 
                                     cal->deadzone, cal->inverted);
             printf("Loaded calibration for gimbal %d\n", i);
+        }
+    }
+}
+
+void ui_apply_pot_calibration(uint8_t pot, int16_t min_val, int16_t max_val, bool inverted)
+{
+    if (!RCInput.isReady()) {
+        printf("Warning: Cannot apply pot calibration - InputManager not ready\n");
+        return;
+    }
+    RCInput.calibratePot(pot, min_val, max_val, inverted);
+}
+
+void ui_load_pot_calibrations(void)
+{
+    if (!RCInput.isReady()) {
+        printf("Warning: Cannot load pot calibration - InputManager not ready\n");
+        return;
+    }
+    
+    const Settings_t* settings = Settings_Get();
+    if (!settings) return;
+    
+    for (uint8_t i = 0; i < 2; i++) {
+        const PotCalibration_t* cal = &settings->pot_cal[i];
+        if (cal->calibrated) {
+            RCInput.calibratePot(i, cal->min_raw, cal->max_raw, cal->inverted);
+            printf("Loaded calibration for pot %d\n", i);
         }
     }
 }
