@@ -66,8 +66,13 @@ void ui_init(void)
 void ui_destroy(void)
 {
     if (ui_MainScreen) {
+        if (lv_screen_active() == ui_MainScreen) {
+            lv_obj_t *shutdown_screen = lv_obj_create(NULL);
+            lv_screen_load(shutdown_screen);
+        }
         lv_obj_del(ui_MainScreen);
         ui_MainScreen = NULL;
+        ui_ContentArea = NULL;
     }
 }
 

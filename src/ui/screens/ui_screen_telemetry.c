@@ -41,6 +41,16 @@ static lv_obj_t *imu9_accel_label = NULL;
 static lv_obj_t *imu9_gyro_label = NULL;
 static lv_obj_t *imu9_mag_label = NULL;
 
+// Hexapod profile panel elements
+static lv_obj_t *hex_mode_label = NULL;
+static lv_obj_t *hex_gait_label = NULL;
+static lv_obj_t *hex_control_label = NULL;
+static lv_obj_t *hex_motion_label = NULL;
+static lv_obj_t *hex_shape_label = NULL;
+static lv_obj_t *hex_timing_label = NULL;
+static lv_obj_t *hex_fault_label = NULL;
+static lv_obj_t *hex_freshness_label = NULL;
+
 // Track which profile panels are active
 static RobotProfile_t active_profile = ROBOT_PROFILE_GENERIC;
 
@@ -229,10 +239,10 @@ static void create_log_panel(void) {
 // Uses the standard panel system - created as part of panels[]
 //=============================================================================
 
-static void create_imu9_panel(void) {
+static void create_imu9_panel(const char *title) {
     printf("IMU9: Starting panel creation...\r\n");
 
-    lv_obj_t *panel = create_panel_base("Remote IMU");
+    lv_obj_t *panel = create_panel_base(title);
     if (!panel) {
         printf("IMU9: ERROR - panel creation failed!\r\n");
         return;
@@ -261,6 +271,70 @@ static void create_imu9_panel(void) {
     imu9_mag_label = lbl3;
 
     printf("IMU9: Panel created successfully\r\n");
+}
+
+static lv_obj_t *create_hex_value(lv_obj_t *panel, const char *caption,
+                                  int16_t y) {
+    lv_obj_t *name = lv_label_create(panel);
+    lv_label_set_text(name, caption);
+    lv_obj_add_style(name, &style_text_secondary, 0);
+    lv_obj_set_style_text_font(name, &lv_font_montserrat_10, 0);
+    lv_obj_set_pos(name, 2, y);
+
+    lv_obj_t *value = lv_label_create(panel);
+    lv_label_set_text(value, "--");
+    lv_obj_add_style(value, &style_text_primary, 0);
+    lv_obj_set_style_text_font(value, &lv_font_montserrat_10, 0);
+    lv_obj_align(value, LV_ALIGN_TOP_RIGHT, -2, y);
+    return value;
+}
+
+static void create_hexapod_panel(void) {
+    lv_obj_t *panel = create_panel_base("Hexapod");
+    panels[num_panels++] = panel;
+
+    hex_freshness_label = lv_label_create(panel);
+    lv_label_set_text(hex_freshness_label, "Waiting");
+    lv_obj_set_style_text_font(hex_freshness_label, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_color(hex_freshness_label,
+                                lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+    lv_obj_align(hex_freshness_label, LV_ALIGN_TOP_RIGHT, -2, 0);
+
+    hex_mode_label = create_hex_value(panel, "Mode", 24);
+    hex_gait_label = create_hex_value(panel, "Gait", 40);
+    hex_control_label = create_hex_value(panel, "Control", 56);
+    hex_motion_label = create_hex_value(panel, "Motion", 72);
+    hex_shape_label = create_hex_value(panel, "Geometry", 88);
+    hex_timing_label = create_hex_value(panel, "Timing", 104);
+    hex_fault_label = create_hex_value(panel, "Fault", 120);
+}
+
+static void reset_panel_widgets(void) {
+    for (uint8_t i = 0; i < MAX_PANELS; ++i) {
+        panels[i] = NULL;
+        page_dots[i] = NULL;
+    }
+    num_panels = 0;
+    current_panel = 0;
+    status_rssi_val = NULL;
+    status_latency_val = NULL;
+    status_errors_val = NULL;
+    status_uptime_val = NULL;
+    status_battery_val = NULL;
+    status_link_icon = NULL;
+    log_textarea = NULL;
+    imu9_panel = NULL;
+    imu9_accel_label = NULL;
+    imu9_gyro_label = NULL;
+    imu9_mag_label = NULL;
+    hex_mode_label = NULL;
+    hex_gait_label = NULL;
+    hex_control_label = NULL;
+    hex_motion_label = NULL;
+    hex_shape_label = NULL;
+    hex_timing_label = NULL;
+    hex_fault_label = NULL;
+    hex_freshness_label = NULL;
 }
 
 
@@ -341,42 +415,29 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
         return;
     }
     
+    if (profile == active_profile && num_panels > 0) {
+        return;
+    }
+
     active_profile = profile;
-    
-    // Only rebuild panels if they haven't been created yet
-    // (first time initialization)
-    if (num_panels == 0 && panel_container) {
-        printf("Telemetry refresh: Creating common panels...\r\n");
-        
-        // Reset element pointers
-        status_rssi_val = NULL;
-        status_latency_val = NULL;
-        status_errors_val = NULL;
-        status_uptime_val = NULL;
-        status_battery_val = NULL;
-        status_link_icon = NULL;
-        log_textarea = NULL;
-        imu9_panel = NULL;
-        imu9_accel_label = NULL;
-        imu9_gyro_label = NULL;
-        imu9_mag_label = NULL;
-        
-        // Common panels for all profiles
-        create_status_panel();
-        create_log_panel();
-        
-        // Always create IMU9 panel (will be shown/hidden based on profile)
-        create_imu9_panel();
-        
-        // Create page indicator
-        create_page_indicator();
+    if (panel_container) {
+        lv_obj_clean(panel_container);
     }
-    
-    // IMU panel is always visible (shows remote BNO055 data via CRSF telemetry)
-    if (imu9_panel) {
-        lv_obj_remove_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
-        printf("Telemetry: IMU panel shown (remote BNO055)\r\n");
+    if (page_indicator) {
+        lv_obj_delete(page_indicator);
+        page_indicator = NULL;
     }
+    reset_panel_widgets();
+
+    create_status_panel();
+    if (profile == ROBOT_PROFILE_HEXAPOD) {
+        create_hexapod_panel();
+    }
+    create_imu9_panel(profile == ROBOT_PROFILE_HEXAPOD ? "Robot IMU" :
+                                                            "Remote IMU");
+    create_log_panel();
+    create_page_indicator();
+    lv_obj_scroll_to_x(panel_container, 0, LV_ANIM_OFF);
     
     printf("Telemetry: Configured for %s profile\r\n", 
            Settings_GetRobotProfileName(profile));
@@ -421,6 +482,23 @@ void ui_telemetry_update_status(int rssi, int latency, int errors, uint32_t upti
         snprintf(buf, sizeof(buf), "%02lu:%02lu:%02lu", (unsigned long)hours, (unsigned long)mins, (unsigned long)secs);
         lv_label_set_text(status_uptime_val, buf);
     }
+}
+
+void ui_telemetry_update_battery(float voltage, bool valid) {
+    if (!status_battery_val) return;
+    char buf[20];
+    if (!valid) {
+        lv_label_set_text(status_battery_val, "-- V");
+        lv_obj_set_style_text_color(status_battery_val,
+                                    lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        return;
+    }
+    snprintf(buf, sizeof(buf), "%.1f V", (double)voltage);
+    lv_label_set_text(status_battery_val, buf);
+    lv_obj_set_style_text_color(status_battery_val,
+                                voltage >= 10.5f
+                                    ? lv_color_hex(UI_COLOR_ACCENT_GREEN)
+                                    : lv_color_hex(UI_COLOR_ACCENT_RED), 0);
 }
 
 void ui_telemetry_add_log(const char *message) {
@@ -473,6 +551,78 @@ void ui_telemetry_update_imu9(float ax, float ay, float az,
         snprintf(buf, sizeof(buf), "Link:  %.1fV LQ%.0f%% SNR%.0f",
                  (double)mx, (double)my, (double)mz);
         lv_label_set_text(imu9_mag_label, buf);
+    }
+}
+
+void ui_telemetry_set_imu_state(bool present, bool fresh) {
+    if (!imu9_accel_label) return;
+    if (fresh) return;
+    const char *missing = active_profile == ROBOT_PROFILE_HEXAPOD
+                              ? "No robot IMU detected"
+                              : "No IMU telemetry";
+    lv_label_set_text(imu9_accel_label, present ? "IMU data stale" : missing);
+    if (imu9_gyro_label) lv_label_set_text(imu9_gyro_label, "Cal:   -- -- --");
+    if (imu9_mag_label) lv_label_set_text(imu9_mag_label, "Link:  waiting");
+}
+
+void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
+                                 bool fresh, uint32_t age_ms) {
+    if (active_profile != ROBOT_PROFILE_HEXAPOD || !hex_freshness_label) {
+        return;
+    }
+
+    char buf[64];
+    if (!status || !fresh) {
+        lv_label_set_text(hex_freshness_label, status ? "Stale" : "Waiting");
+        lv_obj_set_style_text_color(hex_freshness_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        lv_label_set_text(hex_mode_label, "--");
+        lv_label_set_text(hex_gait_label, "--");
+        lv_label_set_text(hex_control_label, "--");
+        lv_label_set_text(hex_motion_label, "--");
+        lv_label_set_text(hex_shape_label, "--");
+        lv_label_set_text(hex_timing_label, "--");
+        lv_label_set_text(hex_fault_label, "--");
+        return;
+    }
+
+    snprintf(buf, sizeof(buf), "%lums", (unsigned long)age_ms);
+    lv_label_set_text(hex_freshness_label, buf);
+    lv_obj_set_style_text_color(hex_freshness_label,
+                                lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+    lv_label_set_text(hex_mode_label,
+                      hexapod_safety_state_name(status->safety_state));
+    lv_label_set_text(hex_gait_label, hexapod_gait_name(status->gait));
+    snprintf(buf, sizeof(buf), "%s / %s",
+             hexapod_control_mode_name(status->control_mode),
+             hexapod_command_source_name(status->command_source));
+    lv_label_set_text(hex_control_label, buf);
+    snprintf(buf, sizeof(buf), "%s / %s",
+             (status->flags & HEXAPOD_FLAG_ARMED) ? "Armed" : "Disarmed",
+             (status->flags & HEXAPOD_FLAG_MOTION_GATE) ? "Active" : "Held");
+    lv_label_set_text(hex_motion_label, buf);
+    snprintf(buf, sizeof(buf), "H%u S%u Z%u mm", status->body_height_mm,
+             status->stride_mm, status->step_height_mm);
+    lv_label_set_text(hex_shape_label, buf);
+    snprintf(buf, sizeof(buf), "%u%% / duty %u%%",
+             (unsigned)((status->speed_x255 * 100u + 127u) / 255u),
+             (unsigned)((status->duty_x255 * 100u + 127u) / 255u));
+    lv_label_set_text(hex_timing_label, buf);
+    if ((status->flags & HEXAPOD_FLAG_FAULT) != 0 || status->fault_reason != 0) {
+        lv_label_set_text(hex_fault_label,
+                          hexapod_fault_name(status->fault_reason));
+        lv_obj_set_style_text_color(hex_fault_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_RED), 0);
+    } else {
+        if ((status->flags & HEXAPOD_FLAG_BATTERY_VALID) != 0) {
+            snprintf(buf, sizeof(buf), "None / %.1fV",
+                     (double)status->battery_mv / 1000.0);
+        } else {
+            snprintf(buf, sizeof(buf), "None / --V");
+        }
+        lv_label_set_text(hex_fault_label, buf);
+        lv_obj_set_style_text_color(hex_fault_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
     }
 }
 

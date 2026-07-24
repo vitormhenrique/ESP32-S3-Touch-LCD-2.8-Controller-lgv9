@@ -5,6 +5,8 @@
  */
 
 #include "Settings.h"
+#include "RadioCli.h"
+#include "ui_custom_integration.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -92,6 +94,31 @@ void Settings_SetGimbalCalibration(uint8_t axis, const GimbalCalibration_t* cal)
     if (axis < 4 && cal) {
         memcpy(&g_settings.gimbal_cal[axis], cal, sizeof(GimbalCalibration_t));
     }
+}
+
+void Settings_SetPotCalibration(uint8_t pot, const PotCalibration_t* cal)
+{
+    if (pot < 2 && cal) {
+        memcpy(&g_settings.pot_cal[pot], cal, sizeof(PotCalibration_t));
+    }
+}
+
+void ui_apply_pot_calibration(uint8_t pot, int16_t min_val, int16_t max_val,
+                              bool inverted)
+{
+    PotCalibration_t cal = {
+        .min_raw = min_val,
+        .max_raw = max_val,
+        .inverted = inverted,
+        .calibrated = true,
+    };
+    Settings_SetPotCalibration(pot, &cal);
+}
+
+void RadioCli_OnElrsEvent(ElrsClientEvent event, uint8_t parameter_id)
+{
+    (void)event;
+    (void)parameter_id;
 }
 
 void Settings_SetRadio(const RadioSettings_t* radio)

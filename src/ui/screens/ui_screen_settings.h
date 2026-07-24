@@ -48,6 +48,12 @@ void ui_pot_cal_record_step(void);
 void ui_pot_cal_update(int16_t values[2]);
 bool ui_pot_cal_is_active(void);
 
+#ifdef SIMULATOR
+// Test-only access to the concrete menu containers used by the LVGL runtime
+// smoke test. Production firmware does not expose layout internals.
+lv_obj_t *ui_settings_debug_menu_root(SettingsMenu_t menu);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

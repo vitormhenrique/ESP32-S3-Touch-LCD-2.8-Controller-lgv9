@@ -496,15 +496,60 @@ void CRSF_Manager::sendElrsQueued() {
 // protocol replies to the LVGL thread; everything else is decoded in-library.
 void CRSF_Manager::rawFrameCb(uint8_t type, const uint8_t* payload,
                               uint8_t len, void* user) {
-    if (type != CRSF_FT_DEVICE_INFO && type != CRSF_FT_PARAM_SETTINGS_ENTRY)
-        return;
     CRSF_Manager* self = static_cast<CRSF_Manager*>(user);
-    if (!self->_elrsRxQueue || len > CRSF_ELRS_FRAME_MAX) return;
-    CRSFElrsFrame_t f;
-    f.type = type;
-    f.len = len;
-    memcpy(f.payload, payload, len);
-    xQueueSend(self->_elrsRxQueue, &f, 0);  // drop if full; client retries
+
+    if (type == CRSF_FT_DEVICE_INFO || type == CRSF_FT_PARAM_SETTINGS_ENTRY) {
+        if (!self->_elrsRxQueue || len > CRSF_ELRS_FRAME_MAX) return;
+        CRSFElrsFrame_t f;
+        f.type = type;
+        f.len = len;
+        memcpy(f.payload, payload, len);
+        xQueueSend(self->_elrsRxQueue, &f, 0);  // drop if full; client retries
+        return;
+    }
+
+    if (!self->_telemetryMutex || !payload) return;
+
+    HexapodTelemetryStatus hexapod;
+    if (type == HEXAPOD_CRSF_FRAME_TYPE &&
+        hexapod_telemetry_decode(payload, len, &hexapod)) {
+        if (xSemaphoreTake(self->_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            self->_telemetry.hexapod = hexapod;
+            self->_telemetry.hexapod_valid = true;
+            self->_telemetry.last_hexapod_ms = millis();
+            self->_telemetry.voltage = (float)hexapod.battery_mv / 1000.0f;
+            xSemaphoreGive(self->_telemetryMutex);
+        }
+        return;
+    }
+
+    if (type == CRSF_FRAMETYPE_BATTERY_SENSOR && len == 8) {
+        const uint16_t voltage_x10 =
+            (uint16_t)(((uint16_t)payload[0] << 8) | payload[1]);
+        if (xSemaphoreTake(self->_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            self->_telemetry.voltage = (float)voltage_x10 / 10.0f;
+            self->_telemetry.remaining = payload[7];
+            xSemaphoreGive(self->_telemetryMutex);
+        }
+        return;
+    }
+
+    if (type == CRSF_FRAMETYPE_ATTITUDE && len == 6) {
+        const int16_t pitch = (int16_t)(((uint16_t)payload[0] << 8) | payload[1]);
+        const int16_t roll = (int16_t)(((uint16_t)payload[2] << 8) | payload[3]);
+        const int16_t yaw = (int16_t)(((uint16_t)payload[4] << 8) | payload[5]);
+        if (xSemaphoreTake(self->_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            self->_telemetry.pitch_deg =
+                (float)pitch / 10000.0f * (180.0f / (float)M_PI);
+            self->_telemetry.roll_deg =
+                (float)roll / 10000.0f * (180.0f / (float)M_PI);
+            self->_telemetry.yaw_deg =
+                (float)yaw / 10000.0f * (180.0f / (float)M_PI);
+            self->_telemetry.attitude_valid = true;
+            self->_telemetry.last_attitude_ms = millis();
+            xSemaphoreGive(self->_telemetryMutex);
+        }
+    }
 }
 
 void CRSF_Manager::setOeMode(bool txMode) {
@@ -571,21 +616,6 @@ void CRSF_Manager::processTelemetry() {
         _telemetry.snr      = stats->uplink_SNR;
         _telemetry.rf_mode  = stats->rf_Mode;
         _telemetry.tx_power = stats->uplink_TX_Power;
-    }
-
-    // Attitude (BNO055 Euler angles from receiver)
-    const crsf_sensor_attitude_t* att = _crsf.getAttitudeSensor();
-    if (att && _crsf.lastValidPacketType() == CRSF_FRAMETYPE_ATTITUDE) {
-        // Attitude values are radians * 10000, big-endian int16
-        int16_t pitch_raw = (int16_t)be16toh(att->pitch);
-        int16_t roll_raw  = (int16_t)be16toh(att->roll);
-        int16_t yaw_raw   = (int16_t)be16toh(att->yaw);
-
-        _telemetry.pitch_deg = (float)pitch_raw / 10000.0f * (180.0f / (float)M_PI);
-        _telemetry.roll_deg  = (float)roll_raw  / 10000.0f * (180.0f / (float)M_PI);
-        _telemetry.yaw_deg   = (float)yaw_raw   / 10000.0f * (180.0f / (float)M_PI);
-        _telemetry.attitude_valid = true;
-        _telemetry.last_attitude_ms = millis();
     }
 
     xSemaphoreGive(_telemetryMutex);
@@ -687,13 +717,34 @@ void CRSF_Manager::updateUI() {
     rssi = (t.rssi_1 > t.rssi_2) ? t.rssi_1 : t.rssi_2;
 
     ui_telemetry_update_status(rssi, (int)t.lq, (int)t.crc_errors, uptime);
+    ui_telemetry_update_battery(t.voltage, t.link_up && t.voltage > 0.0f);
 
-    // IMU panel (BNO055 Euler angles from receiver)
-    if (t.attitude_valid) {
+    const uint32_t now = millis();
+    const uint32_t hexapod_age = t.hexapod_valid
+                                     ? now - t.last_hexapod_ms
+                                     : UINT32_MAX;
+    const bool hexapod_fresh = t.hexapod_valid && hexapod_age <= 1000;
+    if (Settings_Get()->robot_profile == ROBOT_PROFILE_HEXAPOD) {
+        ui_telemetry_update_hexapod(
+            t.hexapod_valid ? &t.hexapod : nullptr,
+            hexapod_fresh, hexapod_age);
+    }
+
+    // Robot IMU attitude is valid only for a bounded interval. The Hexapod
+    // status flags distinguish an absent sensor from stale samples.
+    const bool attitude_fresh = t.attitude_valid &&
+                                (now - t.last_attitude_ms) <= 1000;
+    bool imu_present = t.attitude_valid;
+    if (t.hexapod_valid) {
+        imu_present = (t.hexapod.flags & HEXAPOD_FLAG_IMU_PRESENT) != 0;
+    }
+    ui_telemetry_set_imu_state(imu_present, attitude_fresh);
+    if (attitude_fresh) {
         ui_telemetry_update_imu9(
             t.pitch_deg, t.roll_deg, t.yaw_deg,             // Row 1: Euler angles
-            (float)t.bno_cal_sys, (float)t.bno_cal_gyro,
-            (float)t.bno_cal_accel,                          // Row 2: BNO055 cal
+            (float)((t.hexapod.imu_calibration >> 6) & 0x03),
+            (float)((t.hexapod.imu_calibration >> 4) & 0x03),
+            (float)((t.hexapod.imu_calibration >> 2) & 0x03),
             t.voltage, (float)t.lq, (float)t.snr             // Row 3: Link info
         );
     }

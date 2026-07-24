@@ -4,6 +4,7 @@
 #include <AlfredoCRSF.h>
 #include "InputConfig.h"
 #include "ChannelPack.h"
+#include "telemetry/hexapod_telemetry.h"
 
 //=============================================================================
 // Configuration
@@ -87,6 +88,11 @@ typedef struct {
     uint8_t  bno_cal_accel;
     uint8_t  bno_cal_mag;
     uint8_t  remaining;          // Battery remaining %
+
+    // Versioned robot-specific status (custom CRSF frame 0x80)
+    HexapodTelemetryStatus hexapod;
+    bool     hexapod_valid;
+    uint32_t last_hexapod_ms;
 
     // Connection state
     bool     link_up;

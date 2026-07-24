@@ -8,6 +8,7 @@
  * simulated ES24TX Pro in the desktop simulator.
  */
 #include "ui_screen_radio.h"
+#include "ui_settings_layout.h"
 #include "RadioCli.h"
 #include "../ui_helpers.h"
 #include "../ui_styles.h"
@@ -167,9 +168,9 @@ static lv_obj_t *modal_button(lv_obj_t *parent, const char *text,
                               uint32_t color, lv_event_cb_t cb)
 {
     lv_obj_t *btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 92, 28);
+    lv_obj_set_size(btn, 96, 34);
     lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
-    lv_obj_set_style_radius(btn, 7, 0);
+    lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *lbl = lv_label_create(btn);
     lv_label_set_text(lbl, text);
@@ -224,7 +225,7 @@ static void open_command_popup(uint8_t id)
     close_modal();
     pending_id = id;
 
-    lv_obj_t *panel = open_modal(270, 140);
+    lv_obj_t *panel = open_modal(276, 164);
     cmd_popup = panel;
 
     lv_obj_t *title = lv_label_create(panel);
@@ -243,12 +244,12 @@ static void open_command_popup(uint8_t id)
 
     cmd_confirm_btn = modal_button(panel, "Confirm",
                                    UI_COLOR_ACCENT_GREEN, cmd_confirm_cb);
-    lv_obj_align(cmd_confirm_btn, LV_ALIGN_BOTTOM_LEFT, 4, 0);
+    lv_obj_align(cmd_confirm_btn, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_add_flag(cmd_confirm_btn, LV_OBJ_FLAG_HIDDEN);
 
     lv_obj_t *cancel = modal_button(panel, "Cancel",
                                     UI_COLOR_BG_CARD, cmd_cancel_cb);
-    lv_obj_align(cancel, LV_ALIGN_BOTTOM_RIGHT, -4, 0);
+    lv_obj_align(cancel, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 }
 
 static void update_command_popup(uint8_t id)
@@ -324,7 +325,7 @@ static void confirm_no_cb(lv_event_t *e)
 static void open_confirm_dialog(const char *title_txt, const char *body)
 {
     close_modal();
-    lv_obj_t *panel = open_modal(276, 150);
+    lv_obj_t *panel = open_modal(276, 168);
 
     lv_obj_t *title = lv_label_create(panel);
     lv_label_set_text(title, title_txt);
@@ -342,11 +343,11 @@ static void open_confirm_dialog(const char *title_txt, const char *body)
 
     lv_obj_t *no = modal_button(panel, "Cancel", UI_COLOR_BG_CARD,
                                 confirm_no_cb);
-    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 4, 0);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     lv_obj_t *yes = modal_button(panel, "Confirm", UI_COLOR_ACCENT_BLUE,
                                  confirm_yes_cb);
-    lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, -4, 0);
+    lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 }
 
 //=============================================================================
@@ -361,9 +362,7 @@ static void text_page_close_cb(lv_event_t *e)
 static void open_text_page(const char *title_txt, const char *body)
 {
     close_modal();
-    lv_obj_t *panel = open_modal(292, 196);
-    lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(panel, LV_DIR_VER);
+    lv_obj_t *panel = open_modal(296, 212);
 
     lv_obj_t *title = lv_label_create(panel);
     lv_label_set_text(title, title_txt);
@@ -371,12 +370,22 @@ static void open_text_page(const char *title_txt, const char *body)
     lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
-    lv_obj_t *msg = lv_label_create(panel);
+    lv_obj_t *content = lv_obj_create(panel);
+    lv_obj_set_size(content, lv_pct(100), 124);
+    lv_obj_align(content, LV_ALIGN_TOP_MID, 0, 26);
+    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(content, 0, 0);
+    lv_obj_set_style_pad_all(content, 2, 0);
+    lv_obj_add_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(content, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_AUTO);
+
+    lv_obj_t *msg = lv_label_create(content);
     lv_label_set_text(msg, body);
     lv_obj_add_style(msg, &style_text_secondary, 0);
-    lv_obj_set_width(msg, 260);
+    lv_obj_set_width(msg, lv_pct(100));
     lv_label_set_long_mode(msg, LV_LABEL_LONG_WRAP);
-    lv_obj_align(msg, LV_ALIGN_TOP_LEFT, 4, 24);
+    lv_obj_align(msg, LV_ALIGN_TOP_LEFT, 0, 0);
 
     lv_obj_t *close = modal_button(panel, "Close", UI_COLOR_BG_CARD,
                                    text_page_close_cb);
@@ -559,7 +568,7 @@ static void open_option_editor(const ElrsParam *p)
     close_modal();
     edit_param_id = p->id;
 
-    lv_obj_t *panel = open_modal(250, 190);
+    lv_obj_t *panel = open_modal(260, 208);
 
     lv_obj_t *title = lv_label_create(panel);
     lv_label_set_text(title, p->name);
@@ -578,8 +587,8 @@ static void open_option_editor(const ElrsParam *p)
     editor_roller = lv_roller_create(panel);
     lv_roller_set_options(editor_roller, opts, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_visible_row_count(editor_roller, 3);
-    lv_obj_set_width(editor_roller, 200);
-    lv_obj_align(editor_roller, LV_ALIGN_TOP_MID, 0, 22);
+    lv_obj_set_width(editor_roller, 210);
+    lv_obj_align(editor_roller, LV_ALIGN_TOP_MID, 0, 24);
     lv_obj_set_style_bg_color(editor_roller, lv_color_hex(UI_COLOR_BG_CARD), 0);
     lv_obj_set_style_text_color(editor_roller,
                                 lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
@@ -592,11 +601,11 @@ static void open_option_editor(const ElrsParam *p)
 
     lv_obj_t *no = modal_button(panel, "Cancel", UI_COLOR_BG_CARD,
                                 editor_cancel_cb);
-    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 4, 0);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     lv_obj_t *ok = modal_button(panel, "Set", UI_COLOR_ACCENT_BLUE,
                                 editor_ok_cb);
-    lv_obj_align(ok, LV_ALIGN_BOTTOM_RIGHT, -4, 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 }
 
 // numeric editor -------------------------------------------------------------
@@ -650,7 +659,7 @@ static void open_numeric_editor(const ElrsParam *p)
     edit_param_id = p->id;
     num_edit_value = p->value;
 
-    lv_obj_t *panel = open_modal(250, 160);
+    lv_obj_t *panel = open_modal(260, 176);
 
     lv_obj_t *title = lv_label_create(panel);
     lv_label_set_text(title, p->name);
@@ -659,8 +668,8 @@ static void open_numeric_editor(const ElrsParam *p)
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
 
     lv_obj_t *minus = lv_button_create(panel);
-    lv_obj_set_size(minus, 40, 34);
-    lv_obj_align(minus, LV_ALIGN_TOP_LEFT, 14, 30);
+    lv_obj_set_size(minus, 40, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_align(minus, LV_ALIGN_TOP_LEFT, 12, 30);
     lv_obj_set_style_bg_color(minus, lv_color_hex(UI_COLOR_BG_CARD), 0);
     lv_obj_add_event_cb(minus, num_minus_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *ml = lv_label_create(minus);
@@ -670,11 +679,11 @@ static void open_numeric_editor(const ElrsParam *p)
     num_value_label = lv_label_create(panel);
     lv_obj_add_style(num_value_label, &style_text_primary, 0);
     lv_obj_set_style_text_font(num_value_label, &lv_font_montserrat_14, 0);
-    lv_obj_align(num_value_label, LV_ALIGN_TOP_MID, 0, 38);
+    lv_obj_align(num_value_label, LV_ALIGN_TOP_MID, 0, 39);
 
     lv_obj_t *plus = lv_button_create(panel);
-    lv_obj_set_size(plus, 40, 34);
-    lv_obj_align(plus, LV_ALIGN_TOP_RIGHT, -14, 30);
+    lv_obj_set_size(plus, 40, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_align(plus, LV_ALIGN_TOP_RIGHT, -12, 30);
     lv_obj_set_style_bg_color(plus, lv_color_hex(UI_COLOR_BG_CARD), 0);
     lv_obj_add_event_cb(plus, num_plus_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *pl = lv_label_create(plus);
@@ -685,11 +694,11 @@ static void open_numeric_editor(const ElrsParam *p)
 
     lv_obj_t *no = modal_button(panel, "Cancel", UI_COLOR_BG_CARD,
                                 editor_cancel_cb);
-    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 4, 0);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     lv_obj_t *ok = modal_button(panel, "Set", UI_COLOR_ACCENT_BLUE,
                                 num_ok_cb);
-    lv_obj_align(ok, LV_ALIGN_BOTTOM_RIGHT, -4, 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 }
 
 //=============================================================================
@@ -713,7 +722,7 @@ static void preset_cb(lv_event_t *e)
 static void open_presets_popup(void)
 {
     close_modal();
-    lv_obj_t *panel = open_modal(240, 196);
+    lv_obj_t *panel = open_modal(256, 218);
 
     lv_obj_t *title = lv_label_create(panel);
     lv_label_set_text(title, "Robot ELRS Defaults");
@@ -730,10 +739,10 @@ static void open_presets_popup(void)
 
     for (int i = 0; i < 3; i++) {
         lv_obj_t *btn = lv_button_create(panel);
-        lv_obj_set_size(btn, 200, 30);
-        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 24 + i * 38);
+        lv_obj_set_size(btn, 210, UI_SETTINGS_TOUCH_HEIGHT);
+        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 20 + i * 42);
         lv_obj_set_style_bg_color(btn, lv_color_hex(presets[i].color), 0);
-        lv_obj_set_style_radius(btn, 7, 0);
+        lv_obj_set_style_radius(btn, 6, 0);
         lv_obj_add_event_cb(btn, preset_cb, LV_EVENT_CLICKED,
                             (void *)(intptr_t)presets[i].profile);
         lv_obj_t *lbl = lv_label_create(btn);
@@ -845,17 +854,18 @@ static lv_obj_t *add_row(const char *name, const char *value,
                          uint32_t value_color, bool clickable, int id)
 {
     lv_obj_t *row = lv_obj_create(param_list);
-    lv_obj_set_size(row, lv_pct(100), 30);
+    lv_obj_set_size(row, lv_pct(100), 32);
     lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_BG_CARD), 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_border_color(row, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(row, 7, 0);
+    lv_obj_set_style_radius(row, 6, 0);
     lv_obj_set_style_pad_hor(row, 8, 0);
     lv_obj_set_style_pad_ver(row, 0, 0);
     lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
     if (clickable) {
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(row, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         lv_obj_set_style_bg_color(row, lv_color_hex(UI_COLOR_BORDER),
                                   LV_STATE_PRESSED);
         lv_obj_add_event_cb(row, row_click_cb, LV_EVENT_CLICKED,
@@ -868,7 +878,7 @@ static lv_obj_t *add_row(const char *name, const char *value,
     lv_obj_set_style_text_font(nl, &lv_font_montserrat_12, 0);
     lv_obj_align(nl, LV_ALIGN_LEFT_MID, 0, 0);
     lv_label_set_long_mode(nl, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(nl, 160);
+    lv_obj_set_width(nl, 174);
 
     lv_obj_t *vl = lv_label_create(row);
     lv_label_set_text(vl, value);
@@ -876,7 +886,7 @@ static lv_obj_t *add_row(const char *name, const char *value,
     lv_obj_set_style_text_font(vl, &lv_font_montserrat_12, 0);
     lv_obj_align(vl, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_label_set_long_mode(vl, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(vl, 110);
+    lv_obj_set_width(vl, 100);
     lv_obj_set_style_text_align(vl, LV_TEXT_ALIGN_RIGHT, 0);
 
     return row;
@@ -906,7 +916,7 @@ static void rebuild_list(void)
         elrs_client_selected_device() == CRSF_ADDR_TX_MODULE) {
         add_row("TX Module Profile", LV_SYMBOL_RIGHT,
                 UI_COLOR_ACCENT_BLUE, true, SYNTH_TX_PROFILE);
-        add_row("Firmware Target / Update Notes", LV_SYMBOL_RIGHT,
+        add_row("Firmware / Update Notes", LV_SYMBOL_RIGHT,
                 UI_COLOR_ACCENT_BLUE, true, SYNTH_FW_NOTES);
     }
 
@@ -968,7 +978,7 @@ static void client_event_cb(ElrsClientEvent ev, uint8_t arg, void *user)
         char buf[64];
         if (elrs_client_selected_device() == CRSF_ADDR_TX_MODULE) {
             const ElrsTxHardwareProfile *profile = elrs_service_tx_profile();
-            snprintf(buf, sizeof(buf), "Detected: %s", profile->displayName);
+            snprintf(buf, sizeof(buf), "%s", profile->displayName);
         } else {
             snprintf(buf, sizeof(buf), "%s",
                      dev ? dev->name : "Connected");
@@ -1066,10 +1076,11 @@ static lv_obj_t *icon_button(lv_obj_t *parent, const char *icon,
                              lv_event_cb_t cb, void *user_data)
 {
     lv_obj_t *btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 26, 22);
+    lv_obj_set_size(btn, UI_SETTINGS_ICON_SIZE, UI_SETTINGS_ICON_SIZE);
     lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COLOR_BG_CARD), 0);
     lv_obj_set_style_radius(btn, 6, 0);
     lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_obj_add_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
     lv_obj_t *lbl = lv_label_create(btn);
     lv_label_set_text(lbl, icon);
@@ -1087,20 +1098,21 @@ void ui_radio_menu_create(lv_obj_t *parent)
 
     // ---- top bar --------------------------------------------------------
     lv_obj_t *bar = lv_obj_create(parent);
-    lv_obj_set_size(bar, lv_pct(100), 26);
-    lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 26);
+    lv_obj_set_size(bar, lv_pct(100), UI_SETTINGS_TOOLBAR_HEIGHT);
+    lv_obj_set_pos(bar, 0, UI_SETTINGS_BODY_TOP);
     lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(bar, 0, 0);
-    lv_obj_set_style_pad_all(bar, 0, 0);
+    lv_obj_set_style_pad_hor(bar, 4, 0);
+    lv_obj_set_style_pad_ver(bar, 2, 0);
     lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(bar, 4, 0);
+    lv_obj_set_style_pad_column(bar, 6, 0);
 
     // device tabs
     btn_tx = lv_button_create(bar);
-    lv_obj_set_size(btn_tx, 32, 22);
+    lv_obj_set_size(btn_tx, 38, UI_SETTINGS_ICON_SIZE);
     lv_obj_set_style_radius(btn_tx, 6, 0);
     lv_obj_set_style_pad_all(btn_tx, 0, 0);
     lv_obj_add_event_cb(btn_tx, device_tab_cb, LV_EVENT_CLICKED,
@@ -1111,7 +1123,7 @@ void ui_radio_menu_create(lv_obj_t *parent)
     lv_obj_center(txl);
 
     btn_rx = lv_button_create(bar);
-    lv_obj_set_size(btn_rx, 32, 22);
+    lv_obj_set_size(btn_rx, 38, UI_SETTINGS_ICON_SIZE);
     lv_obj_set_style_radius(btn_rx, 6, 0);
     lv_obj_set_style_pad_all(btn_rx, 0, 0);
     lv_obj_add_event_cb(btn_rx, device_tab_cb, LV_EVENT_CLICKED,
@@ -1136,15 +1148,18 @@ void ui_radio_menu_create(lv_obj_t *parent)
 
     // ---- parameter list --------------------------------------------------
     param_list = lv_obj_create(parent);
-    lv_obj_set_size(param_list, lv_pct(100),
-                    UI_CONTENT_HEIGHT - 26 - 26 - 6);
-    lv_obj_align(param_list, LV_ALIGN_TOP_MID, 0, 54);
+    const int32_t list_top = UI_SETTINGS_BODY_TOP +
+                             UI_SETTINGS_TOOLBAR_HEIGHT + 4;
+    lv_obj_set_size(param_list, lv_pct(100), UI_CONTENT_HEIGHT - list_top);
+    lv_obj_set_pos(param_list, 0, list_top);
     lv_obj_set_style_bg_opa(param_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(param_list, 0, 0);
-    lv_obj_set_style_pad_all(param_list, 0, 0);
-    lv_obj_set_style_pad_row(param_list, 4, 0);
+    lv_obj_set_style_pad_hor(param_list, UI_SETTINGS_PAGE_PAD, 0);
+    lv_obj_set_style_pad_ver(param_list, 2, 0);
+    lv_obj_set_style_pad_row(param_list, UI_SETTINGS_GAP, 0);
     lv_obj_set_flex_flow(param_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scroll_dir(param_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(param_list, LV_SCROLLBAR_MODE_AUTO);
 
     // ---- toast -----------------------------------------------------------
     toast = lv_obj_create(lv_layer_top());
