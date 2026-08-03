@@ -41,6 +41,13 @@ bool hexapod_telemetry_decode(const uint8_t *payload, uint8_t len,
     return true;
 }
 
+bool hexapod_telemetry_is_fresh(bool valid, uint32_t now_ms,
+                                uint32_t last_sample_ms)
+{
+    return valid &&
+           (uint32_t)(now_ms - last_sample_ms) < HEXAPOD_TELEMETRY_STALE_MS;
+}
+
 const char *hexapod_safety_state_name(uint8_t state)
 {
     static const char *const names[] = {
@@ -60,7 +67,7 @@ const char *hexapod_command_source_name(uint8_t source)
 const char *hexapod_gait_name(uint8_t gait)
 {
     static const char *const names[] = {
-        "Stand", "Sit", "Tripod", "Ripple", "Wave", "Crawl",
+        "None", "None", "Tripod", "Ripple", "Wave", "Crawl",
     };
     return gait < (sizeof(names) / sizeof(names[0])) ? names[gait] : "Unknown";
 }

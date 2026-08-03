@@ -116,7 +116,7 @@ static void update_simulated_hexapod(void)
         .step_height_mm = 24,
     };
 
-    ui_telemetry_update_battery(12.0f, true);
+    ui_telemetry_update_battery(12.0f, true, true);
     ui_telemetry_update_hexapod(&status, true, 20);
     ui_telemetry_set_imu_state(true, true);
     ui_telemetry_update_imu9(2.4f, -1.2f, 87.0f,

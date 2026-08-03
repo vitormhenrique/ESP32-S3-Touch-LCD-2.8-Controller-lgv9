@@ -74,7 +74,7 @@ typedef struct {
     uint8_t  rf_mode;
     uint8_t  tx_power;
 
-    // BNO055 Attitude from receiver
+    // BNO085 rotation-vector attitude from the robot
     float    pitch_deg;
     float    roll_deg;
     float    yaw_deg;
@@ -83,10 +83,8 @@ typedef struct {
 
     // Battery/calibration from receiver
     float    voltage;
-    uint8_t  bno_cal_sys;        // BNO055 calibration (0-3)
-    uint8_t  bno_cal_gyro;
-    uint8_t  bno_cal_accel;
-    uint8_t  bno_cal_mag;
+    bool     battery_valid;
+    uint32_t last_battery_ms;
     uint8_t  remaining;          // Battery remaining %
 
     // Versioned robot-specific status (custom CRSF frame 0x80)

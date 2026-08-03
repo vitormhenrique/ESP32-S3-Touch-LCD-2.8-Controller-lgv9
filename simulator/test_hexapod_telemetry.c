@@ -30,6 +30,12 @@ static void test_decodes_version_one_status(void)
     assert(status.step_height_mm == 30);
     assert(strcmp(hexapod_safety_state_name(status.safety_state), "RC Manual") == 0);
     assert(strcmp(hexapod_gait_name(status.gait), "Tripod") == 0);
+    assert(strcmp(hexapod_gait_name(0), "None") == 0);
+    assert(strcmp(hexapod_gait_name(1), "None") == 0);
+    assert(hexapod_telemetry_is_fresh(true, 1999u, 0u));
+    assert(!hexapod_telemetry_is_fresh(true, 2000u, 0u));
+    assert(!hexapod_telemetry_is_fresh(false, 1u, 0u));
+    assert(hexapod_telemetry_is_fresh(true, 1000u, UINT32_MAX - 499u));
 }
 
 static void test_rejects_malformed_status(void)

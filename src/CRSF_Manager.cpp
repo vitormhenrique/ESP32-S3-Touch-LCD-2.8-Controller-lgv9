@@ -518,6 +518,9 @@ void CRSF_Manager::rawFrameCb(uint8_t type, const uint8_t* payload,
             self->_telemetry.hexapod_valid = true;
             self->_telemetry.last_hexapod_ms = millis();
             self->_telemetry.voltage = (float)hexapod.battery_mv / 1000.0f;
+            self->_telemetry.battery_valid =
+                (hexapod.flags & HEXAPOD_FLAG_BATTERY_VALID) != 0;
+            self->_telemetry.last_battery_ms = self->_telemetry.last_hexapod_ms;
             xSemaphoreGive(self->_telemetryMutex);
         }
         return;
@@ -528,6 +531,8 @@ void CRSF_Manager::rawFrameCb(uint8_t type, const uint8_t* payload,
             (uint16_t)(((uint16_t)payload[0] << 8) | payload[1]);
         if (xSemaphoreTake(self->_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
             self->_telemetry.voltage = (float)voltage_x10 / 10.0f;
+            self->_telemetry.battery_valid = true;
+            self->_telemetry.last_battery_ms = millis();
             self->_telemetry.remaining = payload[7];
             xSemaphoreGive(self->_telemetryMutex);
         }
@@ -716,14 +721,17 @@ void CRSF_Manager::updateUI() {
     // RSSI values are negative; pick the one closer to 0
     rssi = (t.rssi_1 > t.rssi_2) ? t.rssi_1 : t.rssi_2;
 
-    ui_telemetry_update_status(rssi, (int)t.lq, (int)t.crc_errors, uptime);
-    ui_telemetry_update_battery(t.voltage, t.link_up && t.voltage > 0.0f);
-
     const uint32_t now = millis();
+    ui_telemetry_update_status(rssi, (int)t.lq, (int)t.crc_errors, uptime);
+    ui_telemetry_update_battery(
+        t.voltage, t.battery_valid,
+        hexapod_telemetry_is_fresh(t.battery_valid, now, t.last_battery_ms));
+
     const uint32_t hexapod_age = t.hexapod_valid
                                      ? now - t.last_hexapod_ms
                                      : UINT32_MAX;
-    const bool hexapod_fresh = t.hexapod_valid && hexapod_age <= 1000;
+    const bool hexapod_fresh = hexapod_telemetry_is_fresh(
+        t.hexapod_valid, now, t.last_hexapod_ms);
     if (Settings_Get()->robot_profile == ROBOT_PROFILE_HEXAPOD) {
         ui_telemetry_update_hexapod(
             t.hexapod_valid ? &t.hexapod : nullptr,
@@ -732,14 +740,13 @@ void CRSF_Manager::updateUI() {
 
     // Robot IMU attitude is valid only for a bounded interval. The Hexapod
     // status flags distinguish an absent sensor from stale samples.
-    const bool attitude_fresh = t.attitude_valid &&
-                                (now - t.last_attitude_ms) <= 1000;
+    const bool attitude_fresh = hexapod_telemetry_is_fresh(
+        t.attitude_valid, now, t.last_attitude_ms);
     bool imu_present = t.attitude_valid;
     if (t.hexapod_valid) {
         imu_present = (t.hexapod.flags & HEXAPOD_FLAG_IMU_PRESENT) != 0;
     }
-    ui_telemetry_set_imu_state(imu_present, attitude_fresh);
-    if (attitude_fresh) {
+    if (t.attitude_valid) {
         ui_telemetry_update_imu9(
             t.pitch_deg, t.roll_deg, t.yaw_deg,             // Row 1: Euler angles
             (float)((t.hexapod.imu_calibration >> 6) & 0x03),
@@ -748,6 +755,7 @@ void CRSF_Manager::updateUI() {
             t.voltage, (float)t.lq, (float)t.snr             // Row 3: Link info
         );
     }
+    ui_telemetry_set_imu_state(imu_present, attitude_fresh);
 }
 
 //=============================================================================

@@ -12,6 +12,7 @@ extern "C" {
 #define HEXAPOD_TELEMETRY_MAGIC_0 0x48u
 #define HEXAPOD_TELEMETRY_MAGIC_1 0x58u
 #define HEXAPOD_TELEMETRY_VERSION 1u
+#define HEXAPOD_TELEMETRY_STALE_MS 2000u
 #define HEXAPOD_STATUS_PAYLOAD_SIZE 20u
 
 #define HEXAPOD_FLAG_ARMED       (1u << 0)
@@ -41,6 +42,8 @@ typedef struct {
 
 bool hexapod_telemetry_decode(const uint8_t *payload, uint8_t len,
                               HexapodTelemetryStatus *status);
+bool hexapod_telemetry_is_fresh(bool valid, uint32_t now_ms,
+                                uint32_t last_sample_ms);
 
 const char *hexapod_safety_state_name(uint8_t state);
 const char *hexapod_command_source_name(uint8_t source);

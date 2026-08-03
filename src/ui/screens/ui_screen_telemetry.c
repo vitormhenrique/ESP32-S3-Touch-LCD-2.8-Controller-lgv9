@@ -301,7 +301,7 @@ static void create_hexapod_panel(void) {
     lv_obj_align(hex_freshness_label, LV_ALIGN_TOP_RIGHT, -2, 0);
 
     hex_mode_label = create_hex_value(panel, "Mode", 24);
-    hex_gait_label = create_hex_value(panel, "Gait", 40);
+    hex_gait_label = create_hex_value(panel, "Pattern", 40);
     hex_control_label = create_hex_value(panel, "Control", 56);
     hex_motion_label = create_hex_value(panel, "Motion", 72);
     hex_shape_label = create_hex_value(panel, "Geometry", 88);
@@ -484,7 +484,7 @@ void ui_telemetry_update_status(int rssi, int latency, int errors, uint32_t upti
     }
 }
 
-void ui_telemetry_update_battery(float voltage, bool valid) {
+void ui_telemetry_update_battery(float voltage, bool valid, bool fresh) {
     if (!status_battery_val) return;
     char buf[20];
     if (!valid) {
@@ -495,6 +495,11 @@ void ui_telemetry_update_battery(float voltage, bool valid) {
     }
     snprintf(buf, sizeof(buf), "%.1f V", (double)voltage);
     lv_label_set_text(status_battery_val, buf);
+    if (!fresh) {
+        lv_obj_set_style_text_color(status_battery_val,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        return;
+    }
     lv_obj_set_style_text_color(status_battery_val,
                                 voltage >= 10.5f
                                     ? lv_color_hex(UI_COLOR_ACCENT_GREEN)
@@ -532,17 +537,21 @@ void ui_telemetry_update_imu9(float ax, float ay, float az,
                               float mx, float my, float mz) {
     char buf[48];
 
-    // Row 1: BNO055 Euler angles (pitch, roll, yaw)
+    // Row 1: BNO085 rotation-vector Euler angles (pitch, roll, yaw)
     if (imu9_accel_label) {
         snprintf(buf, sizeof(buf), "Euler: P%.1f R%.1f Y%.1f",
                  (double)ax, (double)ay, (double)az);
         lv_label_set_text(imu9_accel_label, buf);
     }
 
-    // Row 2: BNO055 calibration (sys, gyro, accel)
+    // Row 2: BNO085 rotation-vector quality for the Hexapod profile.
     if (imu9_gyro_label) {
-        snprintf(buf, sizeof(buf), "Cal:   S%.0f G%.0f A%.0f",
-                 (double)gx, (double)gy, (double)gz);
+        if (active_profile == ROBOT_PROFILE_HEXAPOD) {
+            snprintf(buf, sizeof(buf), "Quality: %.0f/3", (double)gx);
+        } else {
+            snprintf(buf, sizeof(buf), "Cal:   S%.0f G%.0f A%.0f",
+                     (double)gx, (double)gy, (double)gz);
+        }
         lv_label_set_text(imu9_gyro_label, buf);
     }
 
@@ -556,13 +565,49 @@ void ui_telemetry_update_imu9(float ax, float ay, float az,
 
 void ui_telemetry_set_imu_state(bool present, bool fresh) {
     if (!imu9_accel_label) return;
-    if (fresh) return;
+    if (fresh) {
+        lv_obj_set_style_text_color(imu9_accel_label,
+                                    lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        if (imu9_gyro_label) {
+            lv_obj_set_style_text_color(imu9_gyro_label,
+                                        lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        }
+        if (imu9_mag_label) {
+            lv_obj_set_style_text_color(imu9_mag_label,
+                                        lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        }
+        return;
+    }
+    if (present) {
+        lv_obj_set_style_text_color(imu9_accel_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        if (imu9_gyro_label) {
+            lv_obj_set_style_text_color(imu9_gyro_label,
+                                        lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        }
+        if (imu9_mag_label) {
+            lv_obj_set_style_text_color(imu9_mag_label,
+                                        lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        }
+        return;
+    }
     const char *missing = active_profile == ROBOT_PROFILE_HEXAPOD
                               ? "No robot IMU detected"
                               : "No IMU telemetry";
-    lv_label_set_text(imu9_accel_label, present ? "IMU data stale" : missing);
+    lv_label_set_text(imu9_accel_label, missing);
     if (imu9_gyro_label) lv_label_set_text(imu9_gyro_label, "Cal:   -- -- --");
     if (imu9_mag_label) lv_label_set_text(imu9_mag_label, "Link:  waiting");
+}
+
+static void set_hex_value_color(uint32_t color) {
+    lv_obj_t *values[] = {hex_mode_label, hex_gait_label, hex_control_label,
+                          hex_motion_label, hex_shape_label, hex_timing_label,
+                          hex_fault_label};
+    for (uint8_t index = 0; index < sizeof(values) / sizeof(values[0]); ++index) {
+        if (values[index]) {
+            lv_obj_set_style_text_color(values[index], lv_color_hex(color), 0);
+        }
+    }
 }
 
 void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
@@ -572,8 +617,8 @@ void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
     }
 
     char buf[64];
-    if (!status || !fresh) {
-        lv_label_set_text(hex_freshness_label, status ? "Stale" : "Waiting");
+    if (!status) {
+        lv_label_set_text(hex_freshness_label, "Waiting");
         lv_obj_set_style_text_color(hex_freshness_label,
                                     lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
         lv_label_set_text(hex_mode_label, "--");
@@ -586,10 +631,17 @@ void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
         return;
     }
 
-    snprintf(buf, sizeof(buf), "%lums", (unsigned long)age_ms);
+    if (fresh) {
+        snprintf(buf, sizeof(buf), "%lums", (unsigned long)age_ms);
+    } else {
+        snprintf(buf, sizeof(buf), "Stale %lums", (unsigned long)age_ms);
+    }
     lv_label_set_text(hex_freshness_label, buf);
     lv_obj_set_style_text_color(hex_freshness_label,
-                                lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+                                lv_color_hex(fresh ? UI_COLOR_ACCENT_GREEN
+                                                   : UI_COLOR_ACCENT_ORANGE), 0);
+    set_hex_value_color(fresh ? UI_COLOR_TEXT_PRIMARY
+                              : UI_COLOR_ACCENT_ORANGE);
     lv_label_set_text(hex_mode_label,
                       hexapod_safety_state_name(status->safety_state));
     lv_label_set_text(hex_gait_label, hexapod_gait_name(status->gait));
@@ -608,6 +660,9 @@ void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
              (unsigned)((status->speed_x255 * 100u + 127u) / 255u),
              (unsigned)((status->duty_x255 * 100u + 127u) / 255u));
     lv_label_set_text(hex_timing_label, buf);
+    if (!fresh) {
+        return;
+    }
     if ((status->flags & HEXAPOD_FLAG_FAULT) != 0 || status->fault_reason != 0) {
         lv_label_set_text(hex_fault_label,
                           hexapod_fault_name(status->fault_reason));
