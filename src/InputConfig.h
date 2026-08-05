@@ -12,6 +12,8 @@
  * - 2x Gimbals (4 axes total: 2 per gimbal)
  * - 2x Potentiometers
  * - Multiple switches (including 2x 3-position toggles)
+ *
+ * Robot actions and CRSF packing: docs/hexapod_controls.md
  ******************************************************************************/
 
 //=============================================================================
