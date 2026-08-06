@@ -48,6 +48,7 @@ static lv_obj_t *hex_control_label = NULL;
 static lv_obj_t *hex_motion_label = NULL;
 static lv_obj_t *hex_shape_label = NULL;
 static lv_obj_t *hex_timing_label = NULL;
+static lv_obj_t *hex_tune_label = NULL;
 static lv_obj_t *hex_fault_label = NULL;
 static lv_obj_t *hex_freshness_label = NULL;
 
@@ -300,13 +301,15 @@ static void create_hexapod_panel(void) {
                                 lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
     lv_obj_align(hex_freshness_label, LV_ALIGN_TOP_RIGHT, -2, 0);
 
-    hex_mode_label = create_hex_value(panel, "Mode", 24);
-    hex_gait_label = create_hex_value(panel, "Pattern", 40);
-    hex_control_label = create_hex_value(panel, "Control", 56);
-    hex_motion_label = create_hex_value(panel, "Motion", 72);
-    hex_shape_label = create_hex_value(panel, "Geometry", 88);
-    hex_timing_label = create_hex_value(panel, "Timing", 104);
-    hex_fault_label = create_hex_value(panel, "Fault", 120);
+    // 15 px rows keep all eight values inside the 136 px usable panel height.
+    hex_mode_label = create_hex_value(panel, "Mode", 20);
+    hex_gait_label = create_hex_value(panel, "Pattern", 35);
+    hex_control_label = create_hex_value(panel, "Control", 50);
+    hex_motion_label = create_hex_value(panel, "Motion", 65);
+    hex_shape_label = create_hex_value(panel, "Geometry", 80);
+    hex_timing_label = create_hex_value(panel, "Timing", 95);
+    hex_tune_label = create_hex_value(panel, "Tuning", 110);
+    hex_fault_label = create_hex_value(panel, "Error", 125);
 }
 
 static void reset_panel_widgets(void) {
@@ -333,6 +336,7 @@ static void reset_panel_widgets(void) {
     hex_motion_label = NULL;
     hex_shape_label = NULL;
     hex_timing_label = NULL;
+    hex_tune_label = NULL;
     hex_fault_label = NULL;
     hex_freshness_label = NULL;
 }
@@ -602,7 +606,7 @@ void ui_telemetry_set_imu_state(bool present, bool fresh) {
 static void set_hex_value_color(uint32_t color) {
     lv_obj_t *values[] = {hex_mode_label, hex_gait_label, hex_control_label,
                           hex_motion_label, hex_shape_label, hex_timing_label,
-                          hex_fault_label};
+                          hex_tune_label, hex_fault_label};
     for (uint8_t index = 0; index < sizeof(values) / sizeof(values[0]); ++index) {
         if (values[index]) {
             lv_obj_set_style_text_color(values[index], lv_color_hex(color), 0);
@@ -627,6 +631,7 @@ void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
         lv_label_set_text(hex_motion_label, "--");
         lv_label_set_text(hex_shape_label, "--");
         lv_label_set_text(hex_timing_label, "--");
+        lv_label_set_text(hex_tune_label, "--");
         lv_label_set_text(hex_fault_label, "--");
         return;
     }
@@ -660,14 +665,69 @@ void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
              (unsigned)((status->speed_x255 * 100u + 127u) / 255u),
              (unsigned)((status->duty_x255 * 100u + 127u) / 255u));
     lv_label_set_text(hex_timing_label, buf);
+
+    // Gait-tune editor: show which parameter NAV1 is editing and its live
+    // value, so the handset mirrors what leg 1 is demonstrating on the robot.
+    const uint8_t tune_param = hexapod_tune_param(status);
+    if (status->tune_flags & HEXAPOD_TUNE_ACTIVE) {
+        unsigned value = 0;
+        const char *unit = "mm";
+        switch (tune_param) {
+            case HEXAPOD_TUNE_PARAM_STRIDE:
+                value = status->stride_mm;
+                break;
+            case HEXAPOD_TUNE_PARAM_DUTY:
+                value = (status->duty_x255 * 100u + 127u) / 255u;
+                unit = "%";
+                break;
+            case HEXAPOD_TUNE_PARAM_STEP_HEIGHT:
+            default:
+                value = status->step_height_mm;
+                break;
+        }
+        snprintf(buf, sizeof(buf), "%s %u%s%s%s",
+                 hexapod_tune_param_name(tune_param), value, unit,
+                 (status->tune_flags & HEXAPOD_TUNE_PREVIEW) ? " LEG1" : "",
+                 (status->tune_flags & HEXAPOD_TUNE_SAVE_PENDING) ? " SAVE" : "");
+        lv_label_set_text(hex_tune_label, buf);
+        lv_obj_set_style_text_color(hex_tune_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    } else if (status->tune_flags & HEXAPOD_TUNE_CFG_VOLATILE) {
+        lv_label_set_text(hex_tune_label, "Off / not stored");
+        lv_obj_set_style_text_color(hex_tune_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+    } else {
+        lv_label_set_text(hex_tune_label, "Off");
+    }
+
     if (!fresh) {
         return;
     }
+    // One deduplicated error line: the journal on the robot collapses repeats
+    // into a running count, so this row never scrolls with noise.
     if ((status->flags & HEXAPOD_FLAG_FAULT) != 0 || status->fault_reason != 0) {
-        lv_label_set_text(hex_fault_label,
-                          hexapod_fault_name(status->fault_reason));
+        snprintf(buf, sizeof(buf), "FAULT %s",
+                 hexapod_fault_name(status->fault_reason));
+        lv_label_set_text(hex_fault_label, buf);
         lv_obj_set_style_text_color(hex_fault_label,
                                     lv_color_hex(UI_COLOR_ACCENT_RED), 0);
+    } else if (status->error_code != 0) {
+        const uint8_t severity = hexapod_error_severity(status);
+        if (status->error_count > 1) {
+            snprintf(buf, sizeof(buf), "%s/%u x%u",
+                     hexapod_error_name(status->error_code),
+                     (unsigned)status->error_detail,
+                     (unsigned)status->error_count);
+        } else {
+            snprintf(buf, sizeof(buf), "%s/%u",
+                     hexapod_error_name(status->error_code),
+                     (unsigned)status->error_detail);
+        }
+        lv_label_set_text(hex_fault_label, buf);
+        lv_obj_set_style_text_color(
+            hex_fault_label,
+            lv_color_hex(severity >= 2 ? UI_COLOR_ACCENT_RED
+                                       : UI_COLOR_ACCENT_ORANGE), 0);
     } else {
         if ((status->flags & HEXAPOD_FLAG_BATTERY_VALID) != 0) {
             snprintf(buf, sizeof(buf), "None / %.1fV",

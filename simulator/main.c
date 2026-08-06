@@ -114,6 +114,15 @@ static void update_simulated_hexapod(void)
         .body_height_mm = 40,
         .stride_mm = 45,
         .step_height_mm = 24,
+        .tune_flags = HEXAPOD_TUNE_ACTIVE | HEXAPOD_TUNE_PREVIEW |
+                      (HEXAPOD_TUNE_PARAM_STEP_HEIGHT
+                       << HEXAPOD_TUNE_PARAM_SHIFT) |
+                      (1u << HEXAPOD_TUNE_SEVERITY_SHIFT),
+        .error_code = 15,  // Goal Clamped
+        .error_detail = 0,
+        .error_sequence = 3,
+        .error_count = 12,
+        .error_suppressed = 480,
     };
 
     ui_telemetry_update_battery(12.0f, true, true);

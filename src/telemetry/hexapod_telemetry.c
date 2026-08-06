@@ -37,6 +37,12 @@ bool hexapod_telemetry_decode(const uint8_t *payload, uint8_t len,
     decoded.body_height_mm = read_be16(&payload[14]);
     decoded.stride_mm = read_be16(&payload[16]);
     decoded.step_height_mm = read_be16(&payload[18]);
+    decoded.tune_flags = payload[20];
+    decoded.error_code = payload[21];
+    decoded.error_detail = payload[22];
+    decoded.error_sequence = payload[23];
+    decoded.error_count = read_be16(&payload[24]);
+    decoded.error_suppressed = read_be16(&payload[26]);
     *status = decoded;
     return true;
 }
@@ -74,7 +80,8 @@ const char *hexapod_gait_name(uint8_t gait)
 
 const char *hexapod_control_mode_name(uint8_t mode)
 {
-    static const char *const names[] = {"Walk", "Translate", "Rotate"};
+    /* What the RIGHT gimbal does; the left gimbal walks in every mode. */
+    static const char *const names[] = {"Yaw", "Translate", "Rotate"};
     return mode < (sizeof(names) / sizeof(names[0])) ? names[mode] : "Unknown";
 }
 
@@ -85,4 +92,48 @@ const char *hexapod_fault_name(uint8_t fault)
         "Watchdog", "DYNAMIXEL", "Arm Timeout",
     };
     return fault < (sizeof(names) / sizeof(names[0])) ? names[fault] : "Unknown";
+}
+
+const char *hexapod_tune_param_name(uint8_t param)
+{
+    static const char *const names[] = {"Step Height", "Stride", "Duty"};
+    return param < (sizeof(names) / sizeof(names[0])) ? names[param] : "Unknown";
+}
+
+const char *hexapod_error_name(uint8_t code)
+{
+    /* Mirrors safety::ErrorCode in the OpenRB firmware. Keep in sync. */
+    static const char *const names[] = {
+        "None",           "Safety Fault",   "DXL Write",     "DXL Read",
+        "DXL Hardware",   "DXL Bus Silent", "DXL Missing",   "Foot Sensor",
+        "I2C Mux",        "I2C EEPROM",     "Cfg Volatile",  "Cfg Commit",
+        "RC Failsafe",    "RC Frames",      "Unreachable",   "Goal Clamped",
+        "Battery Low",    "Watchdog",       "Save Rejected",
+    };
+    return code < (sizeof(names) / sizeof(names[0])) ? names[code] : "Unknown";
+}
+
+const char *hexapod_error_severity_name(uint8_t severity)
+{
+    static const char *const names[] = {"Info", "Warn", "Error", "Critical"};
+    return severity < (sizeof(names) / sizeof(names[0])) ? names[severity]
+                                                         : "Unknown";
+}
+
+uint8_t hexapod_tune_param(const HexapodTelemetryStatus *status)
+{
+    if (!status) {
+        return 0;
+    }
+    return (uint8_t)((status->tune_flags & HEXAPOD_TUNE_PARAM_MASK) >>
+                     HEXAPOD_TUNE_PARAM_SHIFT);
+}
+
+uint8_t hexapod_error_severity(const HexapodTelemetryStatus *status)
+{
+    if (!status) {
+        return 0;
+    }
+    return (uint8_t)((status->tune_flags & HEXAPOD_TUNE_SEVERITY_MASK) >>
+                     HEXAPOD_TUNE_SEVERITY_SHIFT);
 }

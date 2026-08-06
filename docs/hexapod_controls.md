@@ -7,22 +7,31 @@ E-stop, authority, capability, reach, or servo limits.
 
 ## Gimbals And Adjustments
 
+The gimbals have fixed jobs. The **left gimbal always walks**; the **right
+gimbal turns the robot or moves the body**. `SW_E` changes how the left gimbal
+walks (gait pattern) and `SW_F` changes what the right gimbal does. Body
+translation and rotation therefore need no special gait — the selected gait
+keeps running in every `SW_F` position.
+
 | Physical control | Robot behavior |
 | --- | --- |
-| Left gimbal X | Strafe left/right in every `SW_E` mode |
-| Left gimbal Y | Walk forward/backward in every `SW_E` mode |
-| Right gimbal X, `SW_E` UP | Rotate robot left/right |
-| Right gimbal Y, `SW_E` UP | Unassigned |
-| Right gimbal X/Y, `SW_E` CENTER | Shift body Y/X while left gimbal keeps walking |
-| Right gimbal X/Y, `SW_E` DOWN | Body roll/pitch while left gimbal keeps walking |
+| Left gimbal X | Strafe left/right, in every `SW_F` position |
+| Left gimbal Y | Walk forward/backward, in every `SW_F` position |
+| Right gimbal X, `SW_F` UP | Turn the robot left/right |
+| Right gimbal Y, `SW_F` UP | Unassigned |
+| Right gimbal X/Y, `SW_F` CENTER | Shift body Y/X while the left gimbal keeps walking |
+| Right gimbal X/Y, `SW_F` DOWN | Body roll/pitch while the left gimbal keeps walking |
 | Pot 1 | Gait cadence and torque-enable recovery speed, 0..100% |
-| Pot 2 | Body height, 25..120 mm; center is 60 mm |
-| Encoder 1 | Stride, 0..80 mm; boots at full 80 mm; 128 counts span the range |
-| Encoder 2 | Step lift, 0..50 mm; boots at 25 mm; 128 counts span the range |
+| Pot 2 | Body height, 65..150 mm; center is 132 mm. Fully down is the belly-near-ground crouch |
+| Encoder 1 | Unassigned |
+| Encoder 2 | Unassigned |
 
-Encoder 1 and Encoder 2 are relative controls. Their values reset on controller
-or robot bridge reset; they are not absolute mechanical positions. The encoder
-A/B pins are not additional robot buttons.
+Turning is available only in `SW_F` UP: the two body modes use both right-hand
+axes for the pose overlay.
+
+Stride and step lift moved off the encoders onto the NAV1 gait-tune editor (see
+below), so both encoders are free. The encoder A/B pins are not additional
+robot buttons.
 
 ## Switches
 
@@ -32,8 +41,8 @@ A/B pins are not additional robot buttons.
 | `SW_B` | 2-position, ON | Immediate E-stop/kill and disarm request |
 | `SW_C` | 2-position, ON | Request foot-contact detection |
 | `SW_D` | 2-position, ON | Request terrain leveling |
-| `SW_E` | 3-position UP/CENTER/DOWN | Walk / translate body / rotate body |
-| `SW_F` | 3-position UP/CENTER/DOWN | Wave / ripple / tripod gait; latched in Walk mode |
+| `SW_E` | 3-position UP/CENTER/DOWN | **Left gimbal walk pattern**: wave / ripple / tripod |
+| `SW_F` | 3-position UP/CENTER/DOWN | **Right gimbal job**: turn robot / translate body / rotate body |
 | `SW_G` | 2-position, ON | Request torque-off passive-pose streaming |
 | `SW_H` | 2-position, ON | Hand motion authority to USB host or Jetson |
 
@@ -51,16 +60,32 @@ window. Moving a gait/body stick cancels an active choreography.
 | `BTN_2` | Sit-down choreography |
 | `BTN_3` | Standing body-rock wave choreography |
 | `BTN_4` | Toggle crouched/tall stance |
-| `NAV1 Up` | Add 1 degree pitch trim |
-| `NAV1 Down` | Subtract 1 degree pitch trim |
-| `NAV1 Left` | Add 1 degree left roll trim |
-| `NAV1 Right` | Add 1 degree right roll trim |
-| `NAV1 Center` | Reset roll and pitch trim |
+| `NAV1 Up` | Add 1 degree pitch trim / next gait parameter while tuning |
+| `NAV1 Down` | Subtract 1 degree pitch trim / previous gait parameter while tuning |
+| `NAV1 Left` | Add 1 degree left roll trim / decrease the parameter while tuning |
+| `NAV1 Right` | Add 1 degree right roll trim / increase the parameter while tuning |
+| `NAV1 Center` | Reset roll and pitch trim / save gait settings while tuning |
 | `NAV2 Up` | Twirl in place |
 | `NAV2 Down` | Stretch/push-up sequence |
 | `NAV2 Left` | Hold lean/look pose until cancelled |
-| `NAV2 Right` | Unassigned |
+| `NAV2 Right` | Engage / leave the gait-tune editor |
 | `NAV2 Center` | Loop dance until stick input cancels it |
+
+## Gait Tune Editor
+
+`NAV2 Right` toggles the editor. While it is engaged NAV1 edits gait shape
+instead of pose trim, cycling step height -> stride -> duty and changing the
+selected value by 5% of its safe range per press. `NAV1 Center` persists the
+result to the robot's 24LC32 config; the robot refuses to write EEPROM while it
+is walking and reports the reason on the telemetry `Error` row.
+
+With the robot armed and the sticks centred, leg 1 traces the swing arc once
+every 2 seconds using the live values, so a change is visible on the robot
+itself. Moving a stick cancels the preview immediately.
+
+The robot raises its status downlink from 5 Hz to 20 Hz for 3 seconds after
+every edit, so the `Tuning` row on the Hexapod telemetry page tracks the knob
+without lag.
 
 ## Hardware Input Assignment
 
