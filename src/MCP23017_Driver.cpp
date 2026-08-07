@@ -17,10 +17,20 @@ static const NavSwitchConfig_t _defaultNavSwitchConfigs[NUM_NAV_SWITCHES] = NAV_
 static const EncoderConfig_t _defaultEncoderConfigs[NUM_ENCODERS] = ENCODER_CONFIGS;
 #endif
 
+#if MCP_USE_INTERRUPT
+volatile bool MCP23017_Driver::_interruptPending = false;
+
+void IRAM_ATTR MCP23017_Driver::_isrHandler() {
+    _interruptPending = true;
+}
+#endif
+
 MCP23017_Driver::MCP23017_Driver() {
     _initialized[0] = false;
     _initialized[1] = false;
     _lastUpdateMs = 0;
+    _cachedGPIO[0] = 0xFFFF;  // Pull-ups = all high
+    _cachedGPIO[1] = 0xFFFF;
 }
 
 void MCP23017_Driver::initConfigs() {
@@ -62,62 +72,107 @@ bool MCP23017_Driver::begin() {
     initConfigs();
     
     // Initialize first MCP23017
-    if (_mcp[0].begin_I2C(MCP23017_ADDR_1, &Wire)) {
-        _initialized[0] = true;
-        printf("MCP23017 #1 (0x%02X) initialized\r\n", MCP23017_ADDR_1);
-        
-        // Configure all pins as inputs with pull-ups
-        for (uint8_t pin = 0; pin < 16; pin++) {
-            _mcp[0].pinMode(pin, INPUT_PULLUP);
+    if (I2C_MutexTake(100)) {
+        if (_mcp[0].begin_I2C(MCP23017_ADDR_1, &Wire)) {
+            _initialized[0] = true;
+            printf("MCP23017 #1 (0x%02X) initialized\r\n", MCP23017_ADDR_1);
+            for (uint8_t pin = 0; pin < 16; pin++) {
+                _mcp[0].pinMode(pin, INPUT_PULLUP);
+            }
+        } else {
+            printf("MCP23017 #1 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_1);
         }
-    } else {
-        printf("MCP23017 #1 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_1);
+        I2C_MutexGive();
     }
     
     // Initialize second MCP23017
-    if (_mcp[1].begin_I2C(MCP23017_ADDR_2, &Wire)) {
-        _initialized[1] = true;
-        printf("MCP23017 #2 (0x%02X) initialized\r\n", MCP23017_ADDR_2);
-        
-        // Configure all pins as inputs with pull-ups
-        for (uint8_t pin = 0; pin < 16; pin++) {
-            _mcp[1].pinMode(pin, INPUT_PULLUP);
+    if (I2C_MutexTake(100)) {
+        if (_mcp[1].begin_I2C(MCP23017_ADDR_2, &Wire)) {
+            _initialized[1] = true;
+            printf("MCP23017 #2 (0x%02X) initialized\r\n", MCP23017_ADDR_2);
+            for (uint8_t pin = 0; pin < 16; pin++) {
+                _mcp[1].pinMode(pin, INPUT_PULLUP);
+            }
+        } else {
+            printf("MCP23017 #2 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_2);
         }
-    } else {
-        printf("MCP23017 #2 (0x%02X) initialization FAILED\r\n", MCP23017_ADDR_2);
+        I2C_MutexGive();
     }
     
-    // Initialize encoder states by reading initial pin states
-#if NUM_ENCODERS > 0
-    for (uint8_t i = 0; i < NUM_ENCODERS; i++) {
-        if (_initialized[_encoderConfigs[i].expander]) {
-            _encoderStates[i].last_a = _mcp[_encoderConfigs[i].expander].digitalRead(_encoderConfigs[i].pin_a);
-            _encoderStates[i].last_b = _mcp[_encoderConfigs[i].expander].digitalRead(_encoderConfigs[i].pin_b);
-            if (_encoderConfigs[i].inverted) {
-                _encoderStates[i].last_a = !_encoderStates[i].last_a;
-                _encoderStates[i].last_b = !_encoderStates[i].last_b;
-            }
-        }
+#if MCP_USE_INTERRUPT
+    // Setup MCP23017 interrupt-on-change after init
+    if (_initialized[0] || _initialized[1]) {
+        configureInterrupts();
     }
 #endif
     
     return _initialized[0] && _initialized[1];
 }
 
+#if MCP_USE_INTERRUPT
+void MCP23017_Driver::configureInterrupts() {
+    // Configure both MCPs: mirror INTA/INTB (tied together physically),
+    // open-drain outputs (wire-OR safe), active-LOW
+    for (uint8_t i = 0; i < 2; i++) {
+        if (!_initialized[i]) continue;
+        _mcp[i].setupInterrupts(true, true, LOW);
+        // Enable interrupt-on-change for all 16 pins
+        for (uint8_t pin = 0; pin < 16; pin++) {
+            _mcp[i].setupInterruptPin(pin, CHANGE);
+        }
+        // Clear any pending interrupts by reading INTCAP
+        _mcp[i].clearInterrupts();
+    }
+
+    // Configure ESP32 GPIO with internal pull-up (open-drain needs it)
+    pinMode(MCP_INT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(MCP_INT_PIN), _isrHandler, FALLING);
+
+    printf("MCP23017: Interrupt mode enabled on GPIO%d\r\n", MCP_INT_PIN);
+}
+#endif
+
 void MCP23017_Driver::update() {
     uint32_t now = millis();
-    
-    // Update all standard switches
-#if NUM_SWITCHES > 0
-    for (uint8_t i = 0; i < NUM_SWITCHES; i++) {
-        updateSwitch(i);
+
+#if MCP_USE_INTERRUPT
+    // Interrupt mode: only do I2C read when interrupt fired or periodic fallback
+    bool needsRead = _interruptPending;
+
+    // Periodic fallback to catch any edge-case missed interrupts
+    if ((now - _lastUpdateMs) >= MCP_INT_FALLBACK_MS) {
+        needsRead = true;
+    }
+
+    if (needsRead) {
+        _interruptPending = false;
+        if (I2C_MutexTake(10)) {
+            for (uint8_t exp = 0; exp < 2; exp++) {
+                if (_initialized[exp]) {
+                    _cachedGPIO[exp] = _mcp[exp].readGPIOAB();
+                }
+            }
+            I2C_MutexGive();
+        }
+    }
+#else
+    // Polling mode: always bulk-read
+    if (I2C_MutexTake(10)) {
+        for (uint8_t exp = 0; exp < 2; exp++) {
+            if (_initialized[exp]) {
+                _cachedGPIO[exp] = _mcp[exp].readGPIOAB();
+            }
+        }
+        I2C_MutexGive();
     }
 #endif
     
-    // Update all navigation switches
-#if NUM_NAV_SWITCHES > 0
-    for (uint8_t i = 0; i < NUM_NAV_SWITCHES; i++) {
-        updateNavSwitch(i);
+    // Now process all switches/toggles from cached data (no I2C needed)
+    for (uint8_t i = 0; i < NUM_SWITCHES; i++) {
+        updateSwitch(i);
+    }
+    for (uint8_t i = 0; i < NUM_3POS_TOGGLES; i++) {
+        updateToggle3Pos(i);
     }
 #endif
     
@@ -138,13 +193,11 @@ void MCP23017_Driver::updateSwitch(uint8_t index) {
     SwitchConfig_t* cfg = &_switchConfigs[index];
     SwitchState_Runtime_t* state = &_switchStates[index];
     
-    // Check if expander is initialized
     if (!_initialized[cfg->expander]) return;
     
-    // Read pin state
-    bool pinState = _mcp[cfg->expander].digitalRead(cfg->pin);
+    // Read from cached GPIO (no I2C!)
+    bool pinState = getCachedPin(cfg->expander, cfg->pin);
     
-    // Apply inversion if needed
     if (cfg->inverted) {
         pinState = !pinState;
     }
@@ -152,7 +205,6 @@ void MCP23017_Driver::updateSwitch(uint8_t index) {
     SwitchState_t newState = pinState ? SWITCH_ON : SWITCH_OFF;
     uint32_t now = millis();
     
-    // Debounce: only accept change if enough time has passed
     if (newState != state->state) {
         if ((now - state->last_change_ms) >= DEBOUNCE_MS) {
             state->prev_state = state->state;
@@ -170,31 +222,33 @@ void MCP23017_Driver::updateNavSwitch(uint8_t index) {
     NavSwitchConfig_t* cfg = &_navSwitchConfigs[index];
     NavSwitchState_Runtime_t* state = &_navSwitchStates[index];
     
-    // Check if expander is initialized
     if (!_initialized[cfg->expander]) return;
+    
+    // Read from cached GPIO (no I2C!)
+    bool pinUp = getCachedPin(cfg->expander, cfg->pin_up);
+    bool pinDown = getCachedPin(cfg->expander, cfg->pin_down);
+    
+    if (cfg->inverted) {
+        pinUp = !pinUp;
+        pinDown = !pinDown;
+    }
+    
+    Toggle3PosState_t newState;
+    if (pinUp && !pinDown) {
+        newState = TOGGLE_POS_UP;
+    } else if (!pinUp && pinDown) {
+        newState = TOGGLE_POS_DOWN;
+    } else {
+        newState = TOGGLE_POS_CENTER;
+    }
     
     uint32_t now = millis();
     
-    // Read all direction pins
-    uint8_t pins[NAV_DIR_COUNT] = {
-        cfg->pin_up, cfg->pin_down, cfg->pin_left, cfg->pin_right, cfg->pin_center
-    };
-    
-    for (uint8_t d = 0; d < NAV_DIR_COUNT; d++) {
-        bool pinState = _mcp[cfg->expander].digitalRead(pins[d]);
-        
-        // Apply inversion if needed
-        if (cfg->inverted) {
-            pinState = !pinState;
-        }
-        
-        // Debounce: only accept change if enough time has passed
-        if (pinState != state->directions[d]) {
-            if ((now - state->last_change_ms) >= DEBOUNCE_MS) {
-                state->prev_directions[d] = state->directions[d];
-                state->directions[d] = pinState;
-                state->last_change_ms = now;
-            }
+    if (newState != state->state) {
+        if ((now - state->last_change_ms) >= DEBOUNCE_MS) {
+            state->prev_state = state->state;
+            state->state = newState;
+            state->last_change_ms = now;
         }
     }
 #endif
@@ -409,9 +463,48 @@ const char* MCP23017_Driver::getToggle3PosName(uint8_t index) {
 bool MCP23017_Driver::readPin(uint8_t expander, uint8_t pin) {
     if (expander > 1 || pin > 15) return false;
     if (!_initialized[expander]) return false;
-    return _mcp[expander].digitalRead(pin);
+    
+    // Thread-safe I2C access using global mutex
+    bool result = false;
+    if (I2C_MutexTake(10)) {
+        result = _mcp[expander].digitalRead(pin);
+        I2C_MutexGive();
+    }
+    return result;
+}
+
+bool MCP23017_Driver::getCachedPin(uint8_t expander, uint8_t pin) {
+    if (expander > 1 || pin > 15) return false;
+    return (_cachedGPIO[expander] >> pin) & 0x01;
+}
+
+uint16_t MCP23017_Driver::getCachedGPIO(uint8_t expander) {
+    if (expander > 1) return 0xFFFF;
+    return _cachedGPIO[expander];
 }
 
 bool MCP23017_Driver::isReady() {
     return _initialized[0] && _initialized[1];
 }
+
+#if MCP_USE_INTERRUPT
+bool MCP23017_Driver::checkAndUpdateInterrupt() {
+    if (!_interruptPending) return false;
+
+    _interruptPending = false;
+
+    // Read BOTH chips to update cache AND clear ALL tied interrupts
+    if (I2C_MutexTake(5)) {
+        for (uint8_t exp = 0; exp < 2; exp++) {
+            if (_initialized[exp]) {
+                _cachedGPIO[exp] = _mcp[exp].readGPIOAB();
+            }
+        }
+        I2C_MutexGive();
+        return true;
+    }
+    // Mutex busy — re-flag so next caller retries
+    _interruptPending = true;
+    return false;
+}
+#endif

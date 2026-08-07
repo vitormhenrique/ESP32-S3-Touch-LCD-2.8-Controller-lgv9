@@ -51,8 +51,8 @@ extern "C" {
 #define ICON_BATTERY_1    LV_SYMBOL_BATTERY_1
 #define ICON_BATTERY_EMPTY LV_SYMBOL_BATTERY_EMPTY
 #define ICON_CHARGE       LV_SYMBOL_CHARGE
-#define ICON_INPUT        LV_SYMBOL_EDIT
-#define ICON_TELEMETRY    LV_SYMBOL_DOWNLOAD
+#define ICON_INPUT        LV_SYMBOL_GPS
+#define ICON_TELEMETRY    LV_SYMBOL_LIST
 #define ICON_SETTINGS     LV_SYMBOL_SETTINGS
 
 //=============================================================================

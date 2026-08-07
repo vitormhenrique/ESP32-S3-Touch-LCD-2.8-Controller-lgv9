@@ -14,6 +14,7 @@ static Preferences prefs;
 // NVS namespace and keys
 static const char* NVS_NAMESPACE = "rc_settings";
 static const char* KEY_GIMBAL_CAL = "gimbal_cal";
+static const char* KEY_POT_CAL = "pot_cal";
 static const char* KEY_ROBOT_PROFILE = "robot_prof";
 
 //=============================================================================
@@ -52,8 +53,43 @@ static bool load_from_nvs(void) {
         printf("Settings: No valid gimbal calibration in NVS\r\n");
     }
     
+    // Load pot calibrations
+    len = prefs.getBytesLength(KEY_POT_CAL);
+    if (len == sizeof(settings.pot_cal)) {
+        prefs.getBytes(KEY_POT_CAL, settings.pot_cal, len);
+        printf("Settings: Loaded pot calibration from NVS\r\n");
+        for (int i = 0; i < 2; i++) {
+            if (settings.pot_cal[i].calibrated) {
+                printf("  Pot %d: min=%d, max=%d, inv=%d\r\n",
+                       i, settings.pot_cal[i].min_raw,
+                       settings.pot_cal[i].max_raw,
+                       settings.pot_cal[i].inverted);
+            }
+        }
+    } else {
+        printf("Settings: No valid pot calibration in NVS\r\n");
+    }
+    
     prefs.end();
     return true;
+}
+
+static bool save_pot_cal_to_nvs(void) {
+    if (!prefs.begin(NVS_NAMESPACE, false)) {  // false = read-write
+        printf("Settings: Failed to open NVS for writing\r\n");
+        return false;
+    }
+    
+    size_t written = prefs.putBytes(KEY_POT_CAL, settings.pot_cal, sizeof(settings.pot_cal));
+    prefs.end();
+    
+    if (written == sizeof(settings.pot_cal)) {
+        printf("Settings: Saved pot calibration to NVS (%d bytes)\r\n", written);
+        return true;
+    } else {
+        printf("Settings: Failed to save pot calibration\r\n");
+        return false;
+    }
 }
 
 static bool save_gimbal_cal_to_nvs(void) {
@@ -117,6 +153,14 @@ static void apply_defaults(void) {
         settings.gimbal_cal[i].deadzone = 200;
         settings.gimbal_cal[i].inverted = false;
         settings.gimbal_cal[i].calibrated = false;
+    }
+    
+    // Pot calibration defaults
+    for (int i = 0; i < 2; i++) {
+        settings.pot_cal[i].min_raw = 0;
+        settings.pot_cal[i].max_raw = 32767;
+        settings.pot_cal[i].inverted = false;
+        settings.pot_cal[i].calibrated = false;
     }
     
     // Radio defaults (ELRS)
@@ -183,6 +227,14 @@ void Settings_SetGimbalCalibration(uint8_t axis, const GimbalCalibration_t* cal)
         memcpy(&settings.gimbal_cal[axis], cal, sizeof(GimbalCalibration_t));
         // Auto-save to NVS when calibration is updated
         save_gimbal_cal_to_nvs();
+    }
+}
+
+void Settings_SetPotCalibration(uint8_t pot, const PotCalibration_t* cal) {
+    if (pot < 2 && cal) {
+        memcpy(&settings.pot_cal[pot], cal, sizeof(PotCalibration_t));
+        // Auto-save to NVS when calibration is updated
+        save_pot_cal_to_nvs();
     }
 }
 

@@ -51,9 +51,8 @@ void Perf_Init(void) {
     last_report_time = millis();
     initialized = true;
     
-    Serial.println("\n===== Performance Monitor Initialized =====");
-    Serial.printf("Reporting every %d ms\n", report_interval_ms);
-    Serial.println("============================================\n");
+    printf("\r\n=== Performance Monitor Initialized ===\r\n");
+    printf("Reporting every %d ms\r\n", (int)report_interval_ms);
 }
 
 void Perf_StartSection(PerfCounter_t counter) {
@@ -98,18 +97,15 @@ void Perf_Report(void) {
     
     float elapsed_sec = (float)report_interval_ms / 1000.0f;
     
-    Serial.println("\n╔══════════════════════════════════════════════════════════════════╗");
-    Serial.println("║              PERFORMANCE REPORT (5 second average)               ║");
-    Serial.println("╠══════════════════════════════════════════════════════════════════╣");
-    Serial.println("║ Counter         │  Count  │  Hz    │ Avg(us) │ Min(us) │ Max(us) ║");
-    Serial.println("╠─────────────────┼─────────┼────────┼─────────┼─────────┼─────────╣");
+    printf("\r\n========== PERFORMANCE REPORT (5 sec avg) ==========\r\n");
+    printf("| Counter         | Count  |   Hz   | Avg(us) |\r\n");
+    printf("|-----------------|--------|--------|----------|\r\n");
     
     for (int i = 0; i < PERF_COUNTER_COUNT; i++) {
         PerfData_t* p = &perf_data[i];
         
         float hz = (float)p->count / elapsed_sec;
         float avg_us = p->count > 0 ? (float)p->total_time_us / p->count : 0;
-        uint32_t min_us = p->min_time_us == UINT32_MAX ? 0 : p->min_time_us;
         
         // Cache values for UI
         if (i == PERF_COUNTER_LVGL_RENDER) {
@@ -120,47 +116,13 @@ void Perf_Report(void) {
             cached_driver_hz = hz;
         }
         
-        Serial.printf("║ %-15s │ %7u │ %6.1f │ %7.1f │ %7u │ %7u ║\n",
-                      counter_names[i],
-                      p->count,
-                      hz,
-                      avg_us,
-                      min_us,
-                      p->max_time_us);
+        printf("| %-15s | %6u | %6.1f | %7.1f |\r\n",
+               counter_names[i], p->count, hz, avg_us);
     }
     
-    // Calculate and display additional metrics
-    Serial.println("╠══════════════════════════════════════════════════════════════════╣");
-    
-    // Main loop duty cycle
-    if (perf_data[PERF_COUNTER_MAIN_LOOP].count > 0) {
-        float main_avg_ms = (float)perf_data[PERF_COUNTER_MAIN_LOOP].total_time_us / 
-                           perf_data[PERF_COUNTER_MAIN_LOOP].count / 1000.0f;
-        float main_duty = (main_avg_ms * cached_main_hz) / 10.0f;  // % of time in loop
-        Serial.printf("║ Main Loop Duty Cycle: %.1f%% (avg %.2f ms/iteration)            ║\n", 
-                      main_duty, main_avg_ms);
-    }
-    
-    // LVGL render efficiency
-    if (perf_data[PERF_COUNTER_LVGL_LOOP].count > 0 && 
-        perf_data[PERF_COUNTER_LVGL_RENDER].count > 0) {
-        float render_ratio = (float)perf_data[PERF_COUNTER_LVGL_RENDER].count / 
-                            perf_data[PERF_COUNTER_LVGL_LOOP].count * 100.0f;
-        Serial.printf("║ LVGL Render Ratio: %.1f%% of loops resulted in render           ║\n", 
-                      render_ratio);
-    }
-    
-    // Free heap memory
-    Serial.printf("║ Free Heap: %u bytes (Min: %u bytes)                        ║\n",
-                  ESP.getFreeHeap(), ESP.getMinFreeHeap());
-    
-    // PSRAM if available
-    if (ESP.getPsramSize() > 0) {
-        Serial.printf("║ Free PSRAM: %u bytes                                       ║\n",
-                      ESP.getFreePsram());
-    }
-    
-    Serial.println("╚══════════════════════════════════════════════════════════════════╝\n");
+    printf("|=================================================|\r\n");
+    printf("| Free Heap: %u bytes\r\n", ESP.getFreeHeap());
+    printf("=====================================================\r\n\r\n");
     
     // Reset counters for next period
     for (int i = 0; i < PERF_COUNTER_COUNT; i++) {

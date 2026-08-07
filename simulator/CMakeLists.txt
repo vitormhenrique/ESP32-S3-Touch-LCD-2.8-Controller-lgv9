@@ -36,6 +36,8 @@ file(GLOB UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/components/*.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/screens/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telemetry/*.c
 )
 
 # Simulator sources
@@ -44,12 +46,26 @@ set(SIM_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/hal_stubs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/lv_drv_sdl.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Settings_stub.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/elrs_sim.c
 )
 
 add_executable(simulator
     ${LVGL_SOURCES}
     ${UI_SOURCES}
     ${SIM_SOURCES}
+)
+
+add_executable(test_elrs_service
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_elrs_service.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/elrs_sim.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs/elrs_client.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs/elrs_service.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs/crsf_protocol.c
+)
+
+add_executable(test_hexapod_telemetry
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_hexapod_telemetry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telemetry/hexapod_telemetry.c
 )
 
 # IMPORTANT: Simulator directory must come BEFORE LVGL_DIR so our lv_conf.h is found first!
@@ -59,6 +75,16 @@ target_include_directories(simulator PRIVATE
     ${LVGL_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs
+)
+
+target_include_directories(test_elrs_service PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/elrs
+)
+
+target_include_directories(test_hexapod_telemetry PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 
 # Link SDL2 properly (use full library path on macOS)
@@ -67,6 +93,11 @@ target_link_libraries(simulator PRIVATE
     m
     pthread
 )
+
+enable_testing()
+add_test(NAME test_elrs_service COMMAND test_elrs_service)
+add_test(NAME test_hexapod_telemetry COMMAND test_hexapod_telemetry)
+add_test(NAME test_ui_smoke COMMAND simulator --smoke-test)
 
 # Add compiler flags from pkg-config
 target_compile_options(simulator PRIVATE ${SDL2_CFLAGS_OTHER} -g)

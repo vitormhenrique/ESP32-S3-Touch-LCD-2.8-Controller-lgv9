@@ -17,8 +17,9 @@ bool InputManager::begin() {
     
     bool switchOk = SwitchInput.begin();
     bool analogOk = AnalogInput.begin();
+    bool encoderOk = EncoderInput.begin();
     
-    _initialized = switchOk && analogOk;
+    _initialized = switchOk && analogOk && encoderOk;
     
     if (_initialized) {
         printf("RC Input Manager: All systems OK\r\n");
@@ -26,6 +27,7 @@ bool InputManager::begin() {
         printf("RC Input Manager: Initialization FAILED\r\n");
         if (!switchOk) printf("  - Switch input (MCP23017) failed\r\n");
         if (!analogOk) printf("  - Analog input (ADS1X15) failed\r\n");
+        if (!encoderOk) printf("  - Encoder input failed\r\n");
     }
     
     printf("=======================================\r\n");
@@ -47,17 +49,11 @@ void InputManager::update() {
     // Update analog inputs
     AnalogInput.update();
     
-    // Track update rate
-    _updateCount++;
-    if ((now - _lastRateCalcMs) >= 1000) {
-        _updateRate = _updateCount;
-        _updateCount = 0;
-        _lastRateCalcMs = now;
-    }
+    // Encoder polling handled by dedicated EncoderTask
 }
 
 bool InputManager::isReady() {
-    return _initialized && SwitchInput.isReady() && AnalogInput.isReady();
+    return _initialized && SwitchInput.isReady() && AnalogInput.isReady() && EncoderInput.isReady();
 }
 
 void InputManager::printDebug() {
@@ -75,16 +71,22 @@ void InputManager::printDebug() {
     printf("  POT 1: %4d (raw: %5d)\r\n", getPot(POT_1), getPotRaw(POT_1));
     printf("  POT 2: %4d (raw: %5d)\r\n", getPot(POT_2), getPotRaw(POT_2));
     
-    // Print navigation switches
-    printf("Navigation Switches:\r\n");
-    for (uint8_t i = 0; i < NUM_NAV_SWITCHES; i++) {
-        printf("  NAV_%d: U:%d D:%d L:%d R:%d C:%d\r\n", 
-            i + 1,
-            isNavUp(i) ? 1 : 0,
-            isNavDown(i) ? 1 : 0,
-            isNavLeft(i) ? 1 : 0,
-            isNavRight(i) ? 1 : 0,
-            isNavCenter(i) ? 1 : 0);
+    // Print encoder values
+    printf("Encoders:\r\n");
+    printf("  ENC 1: pos=%ld, dir=%d\r\n", getEncoderPosition(ENCODER_1), getEncoderDirection(ENCODER_1));
+    printf("  ENC 2: pos=%ld, dir=%d\r\n", getEncoderPosition(ENCODER_2), getEncoderDirection(ENCODER_2));
+    
+    // Print 3-position toggles
+    printf("3-Position Toggles:\r\n");
+    for (uint8_t i = 0; i < NUM_3POS_TOGGLES; i++) {
+        const char* posName;
+        switch (getToggle3Pos(i)) {
+            case TOGGLE_POS_UP: posName = "UP"; break;
+            case TOGGLE_POS_CENTER: posName = "CENTER"; break;
+            case TOGGLE_POS_DOWN: posName = "DOWN"; break;
+            default: posName = "?"; break;
+        }
+        printf("  %s: %s\r\n", SwitchInput.getToggle3PosName(i), posName);
     }
     
     // Print encoders

@@ -1,0 +1,101 @@
+#pragma once
+
+#include <Arduino.h>
+#include <crc8.h>
+#include <crsf_protocol.h>
+
+enum eFailsafeAction { fsaNoPulses, fsaHold };
+
+// Callback for raw valid frames the library doesn't decode itself
+// (e.g. config protocol: device info 0x29, parameter entries 0x2B).
+// payload points at the bytes after the type field, payload_len excludes CRC.
+typedef void (*CrsfRawFrameCb)(uint8_t frame_type, const uint8_t* payload,
+                               uint8_t payload_len, void* user);
+
+class AlfredoCRSF
+{
+public:
+    // Packet timeout where buffer is flushed if no data is received in this time
+    static const unsigned int CRSF_PACKET_TIMEOUT_MS = 100;
+    static const unsigned int CRSF_FAILSAFE_STAGE1_MS = 300;
+
+    AlfredoCRSF();
+    void begin(Stream& port);
+    void update();
+    void write(uint8_t b);
+    void write(const uint8_t *buf, size_t len);
+    void queuePacket(uint8_t addr, uint8_t type, const void *payload, uint8_t len);
+    void writePacket(uint8_t addr, uint8_t type, const void *payload, uint8_t len);
+
+    // Return current channel value (1-based) in us
+    int getChannel(unsigned int ch) const { return _channels[ch - 1]; }
+    const crsf_channels_t *getChannelsPacked() const { return &_channelsPacked;}
+    const crsfLinkStatistics_t *getLinkStatistics() const { return &_linkStatistics; }
+    const crsf_sensor_gps_t *getGpsSensor() const { return &_gpsSensor; }
+    const crsf_sensor_vario_t *getVarioSensor() const { return &_varioSensor; }
+    const crsf_sensor_baro_altitude_t *getBaroAltitudeSensor() const { return &_baroAltitudeSensor; }
+    const crsf_sensor_attitude_t *getAttitudeSensor() const { return &_attitudeSensor; }
+    bool isLinkUp() const { return _linkIsUp; }
+
+    // Debug/introspection helpers
+    uint32_t lastValidPacketTimeMs() const { return _lastValidPacketMs; }
+    uint8_t lastValidPacketType() const { return _lastValidPacketType; }
+    // Timestamp of the last valid packet that could NOT be a local echo of
+    // handset traffic (excludes RC_CHANNELS_PACKED 0x16 and DEVICE_PING 0x28).
+    // Tracked per packet, so echoed frames in the same parse batch can't mask it.
+    uint32_t lastModulePacketTimeMs() const { return _lastModulePacketMs; }
+    uint32_t goodPackets() const { return _goodPackets; }
+    uint32_t badPackets() const { return _badPackets; }
+
+    // Raw UART activity (helps diagnose wiring/baud issues)
+    uint32_t bytesRead() const { return _bytesRead; }
+    uint32_t lastByteTimeMs() const { return _lastByteMs; }
+
+    // Register a callback that receives every valid frame (called from the
+    // same context as update()). Used for the ELRS config protocol.
+    void setRawFrameCallback(CrsfRawFrameCb cb, void* user) { _rawCb = cb; _rawCbUser = user; }
+
+private:
+    Stream* _port;
+    uint8_t _rxBuf[CRSF_MAX_PACKET_LEN+3];
+    uint8_t _rxBufPos;
+    Crc8 _crc;
+    crsf_channels_t _channelsPacked;
+    crsfLinkStatistics_t _linkStatistics;
+    crsf_sensor_gps_t _gpsSensor;
+    crsf_sensor_vario_t _varioSensor;
+    crsf_sensor_baro_altitude_t _baroAltitudeSensor;
+    crsf_sensor_attitude_t _attitudeSensor;
+    uint32_t _baud;
+    uint32_t _lastReceive;
+    uint32_t _lastChannelsPacket;
+    bool _linkIsUp;
+    int _channels[CRSF_NUM_CHANNELS];
+
+    uint32_t _lastValidPacketMs;
+    uint8_t _lastValidPacketType;
+    uint32_t _lastModulePacketMs;
+    uint32_t _goodPackets;
+    uint32_t _badPackets;
+
+    uint32_t _bytesRead;
+    uint32_t _lastByteMs;
+
+    CrsfRawFrameCb _rawCb;
+    void* _rawCbUser;
+
+    void handleSerialIn();
+    void handleByteReceived();
+    void shiftRxBuffer(uint8_t cnt);
+    void processPacketIn(uint8_t len);
+    void checkPacketTimeout();
+    void checkLinkDown();
+
+    // Packet RX Handlers
+    void packetChannelsPacked(const crsf_header_t *p);
+    void packetLinkStatistics(const crsf_header_t *p);
+    void packetGps(const crsf_header_t *p);
+    void packetVario(const crsf_header_t *p);
+    void packetBaroAltitude(const crsf_header_t *p);
+    void packetAttitude(const crsf_header_t *p);
+};

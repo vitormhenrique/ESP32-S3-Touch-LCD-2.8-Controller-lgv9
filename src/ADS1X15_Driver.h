@@ -85,8 +85,9 @@ public:
      * @param index Pot index
      * @param min_val Raw value at minimum position
      * @param max_val Raw value at maximum position
+     * @param inverted True to invert direction
      */
-    void calibratePotentiometer(uint8_t index, int16_t min_val, int16_t max_val);
+    void calibratePotentiometer(uint8_t index, int16_t min_val, int16_t max_val, bool inverted = false);
     
     /**
      * Check if ADCs are initialized and responding

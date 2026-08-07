@@ -171,6 +171,7 @@ public:
     
     /**
      * Read raw pin state from expander (for debugging)
+     * NOTE: This does a live I2C read. Use getCachedPin() for fast access.
      * @param expander Expander index (0 or 1)
      * @param pin Pin number (0-15)
      * @return Pin state (HIGH or LOW)
@@ -178,14 +179,42 @@ public:
     bool readPin(uint8_t expander, uint8_t pin);
     
     /**
+     * Get pin state from last bulk-read cache (no I2C, very fast)
+     * @param expander Expander index (0 or 1)
+     * @param pin Pin number (0-15)
+     * @return Pin state from last update()
+     */
+    bool getCachedPin(uint8_t expander, uint8_t pin);
+    
+    /**
+     * Get full cached 16-bit GPIO for an expander (no I2C)
+     * @param expander Expander index (0 or 1)
+     * @return 16-bit GPIO state from last update()
+     */
+    uint16_t getCachedGPIO(uint8_t expander);
+    
+    /**
      * Check if expanders are initialized and responding
      * @return true if both expanders are working
      */
     bool isReady();
 
+#if MCP_USE_INTERRUPT
+    /**
+     * Check if an interrupt is pending and, if so, bulk-read both chips
+     * to refresh the cached GPIO and clear the interrupt.
+     * Safe to call from any task context (takes I2C mutex internally).
+     * @return true if cache was refreshed
+     */
+    bool checkAndUpdateInterrupt();
+#endif
+
 private:
     Adafruit_MCP23X17 _mcp[2];          // Two MCP23017 expanders
     bool _initialized[2];                // Initialization status
+    
+    // Cached GPIO state from last bulk read (avoids per-pin I2C)
+    uint16_t _cachedGPIO[2];
     
     // Switch configurations and states
     SwitchConfig_t _switchConfigs[NUM_SWITCHES > 0 ? NUM_SWITCHES : 1];
@@ -200,7 +229,13 @@ private:
     EncoderState_Runtime_t _encoderStates[NUM_ENCODERS > 0 ? NUM_ENCODERS : 1];
     
     uint32_t _lastUpdateMs;
-    
+
+#if MCP_USE_INTERRUPT
+    static volatile bool _interruptPending;
+    static void IRAM_ATTR _isrHandler();
+    void configureInterrupts();
+#endif
+
     /**
      * Initialize configurations from defines
      */

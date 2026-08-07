@@ -5,14 +5,43 @@
 
 #include "ui_custom_integration.h"
 #include "InputManager.h"
+#include "Encoder_Driver.h"
 #include "Settings.h"
+#include "BAT_Driver.h"
+#include "InputSim.h"
 #include "ui/screens/ui_screen_settings.h"
-
-// Encoder state tracking (you'll need to implement encoder reading)
-static int32_t encoder_values[2] = {0, 0};
+#include "CRSF_Manager.h"
 
 void ui_update_from_inputs(void)
 {
+#if UI_INPUT_SIM
+    //=========================================================================
+    // Simulated input mode: widgets are the input source; reflect sim state
+    //=========================================================================
+    const input_sim_state_t *sim = input_sim_get();
+
+    ui_set_status(true);
+
+    ui_set_gimbal_left(sim->gimbal[0], sim->gimbal[1]);
+    ui_set_gimbal_right(sim->gimbal[2], sim->gimbal[3]);
+
+    for (uint8_t i = 0; i < 6; i++) {
+        ui_set_switch(i, sim->sw[i]);
+    }
+    for (uint8_t i = 0; i < 4; i++) {
+        ui_set_button(i, sim->btn[i]);
+    }
+    ui_set_toggle3(0, sim->toggle3[0]);
+    ui_set_toggle3(1, sim->toggle3[1]);
+
+    // Not exposed for simulation - show defaults
+    ui_set_pot(0, 0);
+    ui_set_pot(1, 0);
+    ui_set_encoder(0, 0);
+    ui_set_encoder(1, 0);
+    ui_set_nav_switch(0, false, false, false, false, false);
+    ui_set_nav_switch(1, false, false, false, false, false);
+#else
     // Only update if InputManager is ready
     if (!RCInput.isReady()) {
         ui_set_status(false);  // Show disconnected icon
@@ -43,50 +72,47 @@ void ui_update_from_inputs(void)
     
     //=========================================================================
     // Update 2-Position Switches
-    // Adjust the indices based on your InputConfig.h SWITCH_CONFIGS
+    // Indices 0-5: SW_A, SW_B, SW_C, SW_D, SW_G, SW_H
     //=========================================================================
-    // Assuming switches 0-5 are your 2-position switches
     for (uint8_t i = 0; i < 6; i++) {
         ui_set_switch(i, RCInput.isSwitchOn(i));
     }
     
     //=========================================================================
     // Update Buttons (momentary switches)
-    // Adjust the indices based on your InputConfig.h SWITCH_CONFIGS
+    // BTN_1=idx 6, BTN_2=idx 7, BTN_3=idx 8, BTN_4=idx 9
     //=========================================================================
-    // Assuming switches 8-11 are your momentary buttons
     for (uint8_t i = 0; i < 4; i++) {
-        ui_set_button(i, RCInput.isSwitchOn(8 + i));
+        ui_set_button(i, RCInput.isSwitchOn(6 + i));
     }
     
     //=========================================================================
     // Update Nav Switches
-    // Nav 1: Indices 12-16 (U, D, L, R, C)
-    // Nav 2: Indices 17-21 (U, D, L, R, C)
+    // Nav 1: Indices 10-14 (U, D, L, R, C)
+    // Nav 2: Indices 15-19 (U, D, L, R, C)
     //=========================================================================
-    ui_set_nav_switch(0, 
-        RCInput.isSwitchOn(12), // Up
-        RCInput.isSwitchOn(13), // Down
-        RCInput.isSwitchOn(14), // Left
-        RCInput.isSwitchOn(15), // Right
-        RCInput.isSwitchOn(16)  // Center
+    ui_set_nav_switch(0,
+        RCInput.isSwitchOn(10), // Up
+        RCInput.isSwitchOn(11), // Down
+        RCInput.isSwitchOn(12), // Left
+        RCInput.isSwitchOn(13), // Right
+        RCInput.isSwitchOn(14)  // Center
     );
-    
-    ui_set_nav_switch(1, 
-        RCInput.isSwitchOn(17), // Up
-        RCInput.isSwitchOn(18), // Down
-        RCInput.isSwitchOn(19), // Left
-        RCInput.isSwitchOn(20), // Right
-        RCInput.isSwitchOn(21)  // Center
+
+    ui_set_nav_switch(1,
+        RCInput.isSwitchOn(15), // Up
+        RCInput.isSwitchOn(16), // Down
+        RCInput.isSwitchOn(17), // Left
+        RCInput.isSwitchOn(18), // Right
+        RCInput.isSwitchOn(19)  // Center
     );
     
     //=========================================================================
     // Update Encoders
-    // Note: You'll need to implement encoder reading in your InputManager
-    // or create a separate encoder driver. For now, this is a placeholder.
+    // Now using actual encoder values from the Encoder_Driver
     //=========================================================================
-    ui_set_encoder(0, encoder_values[0]);
-    ui_set_encoder(1, encoder_values[1]);
+    ui_set_encoder(0, RCInput.getEncoderPosition(ENCODER_1));
+    ui_set_encoder(1, RCInput.getEncoderPosition(ENCODER_2));
     
     //=========================================================================
     // Update Gimbal Calibration Display
@@ -98,22 +124,41 @@ void ui_update_from_inputs(void)
     gimbal_raw[2] = RCInput.getGimbalRaw(GIMBAL_RIGHT_X);
     gimbal_raw[3] = RCInput.getGimbalRaw(GIMBAL_RIGHT_Y);
     ui_gimbal_cal_update(gimbal_raw);
+
+    //=========================================================================
+    // Update Pot Calibration Display
+    //=========================================================================
+    int16_t pot_raw[2];
+    pot_raw[0] = RCInput.getPotRaw(POT_1);
+    pot_raw[1] = RCInput.getPotRaw(POT_2);
+    ui_pot_cal_update(pot_raw);
+#endif // UI_INPUT_SIM
+
+    //=========================================================================
+    // Update battery voltage on top bar
+    //=========================================================================
+    ui_set_battery_voltage(BAT_analogVolts);
+
+    //=========================================================================
+    // Update Telemetry from CRSF link
+    //=========================================================================
+    if (CRSFLink.isReady()) {
+        CRSFLink.updateUI();
+    }
 }
 
 // Call these from your encoder ISR or polling routine
 void ui_encoder_increment(uint8_t index, int32_t delta)
 {
-    if (index < 2) {
-        encoder_values[index] += delta;
-        ui_set_encoder(index, encoder_values[index]);
-    }
+    // No longer needed - encoder is handled by Encoder_Driver and LVGL
+    (void)index;
+    (void)delta;
 }
 
 void ui_encoder_set(uint8_t index, int32_t value)
 {
-    if (index < 2) {
-        encoder_values[index] = value;
-        ui_set_encoder(index, encoder_values[index]);
+    if (index < ENCODER_COUNT) {
+        EncoderInput.setPosition(index, value);
     }
 }
 
@@ -142,6 +187,34 @@ void ui_load_gimbal_calibrations(void)
             RCInput.calibrateGimbal(i, cal->min_raw, cal->center_raw, cal->max_raw, 
                                     cal->deadzone, cal->inverted);
             printf("Loaded calibration for gimbal %d\n", i);
+        }
+    }
+}
+
+void ui_apply_pot_calibration(uint8_t pot, int16_t min_val, int16_t max_val, bool inverted)
+{
+    if (!RCInput.isReady()) {
+        printf("Warning: Cannot apply pot calibration - InputManager not ready\n");
+        return;
+    }
+    RCInput.calibratePot(pot, min_val, max_val, inverted);
+}
+
+void ui_load_pot_calibrations(void)
+{
+    if (!RCInput.isReady()) {
+        printf("Warning: Cannot load pot calibration - InputManager not ready\n");
+        return;
+    }
+    
+    const Settings_t* settings = Settings_Get();
+    if (!settings) return;
+    
+    for (uint8_t i = 0; i < 2; i++) {
+        const PotCalibration_t* cal = &settings->pot_cal[i];
+        if (cal->calibrated) {
+            RCInput.calibratePot(i, cal->min_raw, cal->max_raw, cal->inverted);
+            printf("Loaded calibration for pot %d\n", i);
         }
     }
 }

@@ -49,8 +49,8 @@ void ui_create_header(lv_obj_t *parent)
     ui_TitleLabel = lv_label_create(ui_HeaderPanel);
     lv_label_set_text(ui_TitleLabel, Settings_GetRobotProfileName(Settings_Get()->robot_profile));
     lv_obj_add_style(ui_TitleLabel, &style_text_primary, 0);
-    lv_obj_set_style_text_font(ui_TitleLabel, &lv_font_montserrat_10, 0);
-    lv_obj_align(ui_TitleLabel, LV_ALIGN_LEFT_MID, 2, 0);
+    lv_obj_set_style_text_font(ui_TitleLabel, &lv_font_montserrat_12, 0);
+    lv_obj_align(ui_TitleLabel, LV_ALIGN_LEFT_MID, 6, 0);
     
     ui_StatusIcon = lv_label_create(ui_HeaderPanel);
     lv_label_set_text(ui_StatusIcon, ICON_WIFI_OFF);
@@ -63,10 +63,10 @@ void ui_create_header(lv_obj_t *parent)
     lv_obj_align(ui_BatteryIcon, LV_ALIGN_RIGHT_MID, -34, 0);
     
     ui_BatteryLabel = lv_label_create(ui_HeaderPanel);
-    lv_label_set_text(ui_BatteryLabel, "100%");
+    lv_label_set_text(ui_BatteryLabel, "--V");
     lv_obj_add_style(ui_BatteryLabel, &style_text_secondary, 0);
     lv_obj_set_style_text_font(ui_BatteryLabel, &lv_font_montserrat_10, 0);
-    lv_obj_align(ui_BatteryLabel, LV_ALIGN_RIGHT_MID, -2, 0);
+    lv_obj_align(ui_BatteryLabel, LV_ALIGN_RIGHT_MID, -6, 0);
 }
 
 void ui_create_nav_bar(lv_obj_t *parent)
@@ -79,26 +79,30 @@ void ui_create_nav_bar(lv_obj_t *parent)
     lv_obj_set_style_border_side(ui_NavPanel, LV_BORDER_SIDE_TOP, 0);
     lv_obj_set_flex_flow(ui_NavPanel, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ui_NavPanel, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_top(ui_NavPanel, 4, 0);
-    lv_obj_set_style_pad_bottom(ui_NavPanel, 6, 0);  // Extra padding at bottom
-    lv_obj_set_style_pad_hor(ui_NavPanel, 8, 0);
+    lv_obj_set_style_pad_ver(ui_NavPanel, 3, 0);
+    lv_obj_set_style_pad_hor(ui_NavPanel, 10, 0);
+    lv_obj_set_style_pad_column(ui_NavPanel, 8, 0);
     
-    // Icons with labels - improved touch targets
+    // Pill-style tabs: icon + label, evenly stretched across the bar
     const char *nav_icons[] = {ICON_INPUT, ICON_TELEMETRY, ICON_SETTINGS};
     const char *nav_labels[] = {"Input", "Data", "Settings"};
     lv_obj_t **nav_btns[] = {&ui_NavBtnInput, &ui_NavBtnTelemetry, &ui_NavBtnSettings};
     
     for (int i = 0; i < 3; i++) {
         lv_obj_t *btn = lv_button_create(ui_NavPanel);
-        lv_obj_set_size(btn, 90, 28);
+        lv_obj_set_height(btn, 28);
+        lv_obj_set_flex_grow(btn, 1);
         lv_obj_add_event_cb(btn, nav_btn_event_cb, LV_EVENT_CLICKED, NULL);
-        lv_obj_set_style_radius(btn, 6, 0);
         lv_obj_set_style_pad_all(btn, 0, 0);
+        
+        // Pressed feedback: subtle accent tint
+        lv_obj_set_style_bg_color(btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(btn, LV_OPA_10, LV_STATE_PRESSED);
         
         // Horizontal layout: icon + label
         lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(btn, 4, 0);
+        lv_obj_set_style_pad_column(btn, 6, 0);
         
         lv_obj_t *icon = lv_label_create(btn);
         lv_label_set_text(icon, nav_icons[i]);
@@ -106,7 +110,7 @@ void ui_create_nav_bar(lv_obj_t *parent)
         
         lv_obj_t *lbl = lv_label_create(btn);
         lv_label_set_text(lbl, nav_labels[i]);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_10, 0);
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
         
         ui_NavBtnLabels[i] = icon;
         *nav_btns[i] = btn;
@@ -131,38 +135,34 @@ void ui_update_nav_buttons(int active_screen_index)
     }
 }
 
-void ui_set_battery(uint8_t percent, int state)
+void ui_set_battery_voltage(float voltage)
 {
     if (!ui_BatteryLabel || !ui_BatteryIcon) return;
-    
+
     char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", percent);
+    snprintf(buf, sizeof(buf), "%.1fV", voltage);
     lv_label_set_text(ui_BatteryLabel, buf);
-    
+
     const char *icon;
     lv_color_t color;
-    
-    // 0=Unknown, 1=Discharging, 2=Charging, 3=Full
-    if (state == 2) { // CHARGING
-        icon = ICON_CHARGE;
-        color = lv_color_hex(UI_COLOR_ACCENT_CYAN);
-    } else if (percent > 80) {
+
+    if (voltage > 3.9f) {
         icon = ICON_BATTERY_FULL;
         color = lv_color_hex(UI_COLOR_ACCENT_GREEN);
-    } else if (percent > 60) {
+    } else if (voltage > 3.7f) {
         icon = ICON_BATTERY_3;
         color = lv_color_hex(UI_COLOR_ACCENT_GREEN);
-    } else if (percent > 40) {
+    } else if (voltage > 3.5f) {
         icon = ICON_BATTERY_2;
         color = lv_color_hex(UI_COLOR_ACCENT_ORANGE);
-    } else if (percent > 20) {
+    } else if (voltage > 3.3f) {
         icon = ICON_BATTERY_1;
         color = lv_color_hex(UI_COLOR_ACCENT_ORANGE);
     } else {
         icon = ICON_BATTERY_EMPTY;
         color = lv_color_hex(UI_COLOR_ACCENT_RED);
     }
-    
+
     lv_label_set_text(ui_BatteryIcon, icon);
     lv_obj_set_style_text_color(ui_BatteryIcon, color, 0);
     lv_obj_set_style_text_color(ui_BatteryLabel, color, 0);

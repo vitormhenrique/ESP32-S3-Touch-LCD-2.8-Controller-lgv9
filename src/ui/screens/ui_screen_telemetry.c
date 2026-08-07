@@ -41,6 +41,17 @@ static lv_obj_t *imu9_accel_label = NULL;
 static lv_obj_t *imu9_gyro_label = NULL;
 static lv_obj_t *imu9_mag_label = NULL;
 
+// Hexapod profile panel elements
+static lv_obj_t *hex_mode_label = NULL;
+static lv_obj_t *hex_gait_label = NULL;
+static lv_obj_t *hex_control_label = NULL;
+static lv_obj_t *hex_motion_label = NULL;
+static lv_obj_t *hex_shape_label = NULL;
+static lv_obj_t *hex_timing_label = NULL;
+static lv_obj_t *hex_tune_label = NULL;
+static lv_obj_t *hex_fault_label = NULL;
+static lv_obj_t *hex_freshness_label = NULL;
+
 // Track which profile panels are active
 static RobotProfile_t active_profile = ROBOT_PROFILE_GENERIC;
 
@@ -52,8 +63,11 @@ static void update_page_indicator(void) {
     for (int i = 0; i < num_panels; i++) {
         if (page_dots[i]) {
             if (i == current_panel) {
+                // Active dot becomes an accent pill
+                lv_obj_set_size(page_dots[i], 16, 6);
                 lv_obj_set_style_bg_color(page_dots[i], lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
             } else {
+                lv_obj_set_size(page_dots[i], 6, 6);
                 lv_obj_set_style_bg_color(page_dots[i], lv_color_hex(UI_COLOR_BORDER), 0);
             }
         }
@@ -86,20 +100,40 @@ static void telemetry_scroll_event_cb(lv_event_t *e) {
 //=============================================================================
 
 static lv_obj_t *create_panel_base(const char *title) {
-    lv_obj_t *panel = lv_obj_create(panel_container);
-    lv_obj_set_size(panel, UI_SCREEN_WIDTH - 8, UI_CONTENT_HEIGHT - 20);
+    // Page wrapper is exactly one screen wide so every page (including the
+    // last) snaps perfectly centered
+    lv_obj_t *page = lv_obj_create(panel_container);
+    lv_obj_set_size(page, UI_SCREEN_WIDTH, lv_pct(100));
+    lv_obj_set_pos(page, num_panels * UI_SCREEN_WIDTH, 0);
+    lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(page, 0, 0);
+    lv_obj_set_style_pad_all(page, 0, 0);
+    lv_obj_remove_flag(page, LV_OBJ_FLAG_SCROLLABLE);
+    
+    lv_obj_t *panel = lv_obj_create(page);
+    lv_obj_set_size(panel, UI_SCREEN_WIDTH - 16, UI_CONTENT_HEIGHT - 24);
+    lv_obj_align(panel, LV_ALIGN_TOP_MID, 0, 6);  // breathing room below header
     lv_obj_set_style_bg_color(panel, lv_color_hex(UI_COLOR_BG_PANEL), 0);
-    lv_obj_set_style_border_width(panel, 0, 0);
-    lv_obj_set_style_radius(panel, 8, 0);
-    lv_obj_set_style_pad_all(panel, 6, 0);
+    lv_obj_set_style_border_width(panel, 1, 0);
+    lv_obj_set_style_border_color(panel, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_radius(panel, 12, 0);
+    lv_obj_set_style_pad_all(panel, 10, 0);
     lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
     
-    // Title
+    // Title - top-left with accent tick
+    lv_obj_t *tick = lv_obj_create(panel);
+    lv_obj_set_size(tick, 3, 12);
+    lv_obj_align(tick, LV_ALIGN_TOP_LEFT, 0, 1);
+    lv_obj_set_style_bg_color(tick, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_set_style_radius(tick, 2, 0);
+    lv_obj_set_style_border_width(tick, 0, 0);
+    lv_obj_remove_flag(tick, LV_OBJ_FLAG_SCROLLABLE);
+    
     lv_obj_t *lbl = lv_label_create(panel);
     lv_label_set_text(lbl, title);
     lv_obj_add_style(lbl, &style_text_primary, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align(lbl, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(lbl, LV_ALIGN_TOP_LEFT, 9, 0);
     
     return panel;
 }
@@ -108,20 +142,20 @@ static void create_status_panel(void) {
     lv_obj_t *panel = create_panel_base("Status");
     panels[num_panels++] = panel;
     
-    int y = 20;
+    int y = 26;
     int row_h = 22;
     
-    // Connection status icon
+    // Connection status - top-right, on the title row
     status_link_icon = lv_label_create(panel);
     lv_label_set_text(status_link_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(status_link_icon, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
-    lv_obj_align(status_link_icon, LV_ALIGN_TOP_LEFT, 0, y);
+    lv_obj_align(status_link_icon, LV_ALIGN_TOP_RIGHT, -70, 0);
     
     lv_obj_t *link_lbl = lv_label_create(panel);
     lv_label_set_text(link_lbl, "Connected");
     lv_obj_add_style(link_lbl, &style_text_primary, 0);
-    lv_obj_align(link_lbl, LV_ALIGN_TOP_LEFT, 22, y);
-    y += row_h + 4;
+    lv_obj_set_style_text_font(link_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_align(link_lbl, LV_ALIGN_TOP_RIGHT, 0, 0);
     
     // RSSI
     lv_obj_t *rssi_lbl = lv_label_create(panel);
@@ -189,7 +223,7 @@ static void create_log_panel(void) {
     
     // Create textarea for log
     log_textarea = lv_textarea_create(panel);
-    lv_obj_set_size(log_textarea, lv_pct(100), UI_CONTENT_HEIGHT - 50);
+    lv_obj_set_size(log_textarea, lv_pct(100), UI_CONTENT_HEIGHT - 68);
     lv_obj_align(log_textarea, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_bg_color(log_textarea, lv_color_hex(UI_COLOR_BG_DARK), 0);
     lv_obj_set_style_text_color(log_textarea, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
@@ -206,10 +240,10 @@ static void create_log_panel(void) {
 // Uses the standard panel system - created as part of panels[]
 //=============================================================================
 
-static void create_imu9_panel(void) {
+static void create_imu9_panel(const char *title) {
     printf("IMU9: Starting panel creation...\r\n");
-    
-    lv_obj_t *panel = create_panel_base("9-DOF IMU");
+
+    lv_obj_t *panel = create_panel_base(title);
     if (!panel) {
         printf("IMU9: ERROR - panel creation failed!\r\n");
         return;
@@ -217,29 +251,94 @@ static void create_imu9_panel(void) {
     panels[num_panels++] = panel;
     imu9_panel = panel;
     printf("IMU9: Base panel created, num_panels=%d\r\n", num_panels);
-    
-    // Simple test: just 3 static labels
+
     lv_obj_t *lbl1 = lv_label_create(panel);
-    lv_label_set_text(lbl1, "Accel: 0.00, 0.00, 0.00");
+    lv_label_set_text(lbl1, "Euler: ---, ---, ---");
     lv_obj_add_style(lbl1, &style_text_primary, 0);
-    lv_obj_set_pos(lbl1, 5, 20);
-    
+    lv_obj_set_pos(lbl1, 5, 26);
+
     lv_obj_t *lbl2 = lv_label_create(panel);
-    lv_label_set_text(lbl2, "Gyro:  0.00, 0.00, 0.00");
+    lv_label_set_text(lbl2, "Cal:   ---, ---, ---");
     lv_obj_add_style(lbl2, &style_text_primary, 0);
-    lv_obj_set_pos(lbl2, 5, 40);
-    
+    lv_obj_set_pos(lbl2, 5, 48);
+
     lv_obj_t *lbl3 = lv_label_create(panel);
-    lv_label_set_text(lbl3, "Mag:   0.00, 0.00, 0.00");
+    lv_label_set_text(lbl3, "Link:  ---, ---, ---");
     lv_obj_add_style(lbl3, &style_text_primary, 0);
-    lv_obj_set_pos(lbl3, 5, 60);
-    
-    // Store references for updates
+    lv_obj_set_pos(lbl3, 5, 70);
+
     imu9_accel_label = lbl1;
     imu9_gyro_label = lbl2;
     imu9_mag_label = lbl3;
-    
+
     printf("IMU9: Panel created successfully\r\n");
+}
+
+static lv_obj_t *create_hex_value(lv_obj_t *panel, const char *caption,
+                                  int16_t y) {
+    lv_obj_t *name = lv_label_create(panel);
+    lv_label_set_text(name, caption);
+    lv_obj_add_style(name, &style_text_secondary, 0);
+    lv_obj_set_style_text_font(name, &lv_font_montserrat_10, 0);
+    lv_obj_set_pos(name, 2, y);
+
+    lv_obj_t *value = lv_label_create(panel);
+    lv_label_set_text(value, "--");
+    lv_obj_add_style(value, &style_text_primary, 0);
+    lv_obj_set_style_text_font(value, &lv_font_montserrat_10, 0);
+    lv_obj_align(value, LV_ALIGN_TOP_RIGHT, -2, y);
+    return value;
+}
+
+static void create_hexapod_panel(void) {
+    lv_obj_t *panel = create_panel_base("Hexapod");
+    panels[num_panels++] = panel;
+
+    hex_freshness_label = lv_label_create(panel);
+    lv_label_set_text(hex_freshness_label, "Waiting");
+    lv_obj_set_style_text_font(hex_freshness_label, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_color(hex_freshness_label,
+                                lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+    lv_obj_align(hex_freshness_label, LV_ALIGN_TOP_RIGHT, -2, 0);
+
+    // 15 px rows keep all eight values inside the 136 px usable panel height.
+    hex_mode_label = create_hex_value(panel, "Mode", 20);
+    hex_gait_label = create_hex_value(panel, "Pattern", 35);
+    hex_control_label = create_hex_value(panel, "Control", 50);
+    hex_motion_label = create_hex_value(panel, "Motion", 65);
+    hex_shape_label = create_hex_value(panel, "Geometry", 80);
+    hex_timing_label = create_hex_value(panel, "Timing", 95);
+    hex_tune_label = create_hex_value(panel, "Tuning", 110);
+    hex_fault_label = create_hex_value(panel, "Error", 125);
+}
+
+static void reset_panel_widgets(void) {
+    for (uint8_t i = 0; i < MAX_PANELS; ++i) {
+        panels[i] = NULL;
+        page_dots[i] = NULL;
+    }
+    num_panels = 0;
+    current_panel = 0;
+    status_rssi_val = NULL;
+    status_latency_val = NULL;
+    status_errors_val = NULL;
+    status_uptime_val = NULL;
+    status_battery_val = NULL;
+    status_link_icon = NULL;
+    log_textarea = NULL;
+    imu9_panel = NULL;
+    imu9_accel_label = NULL;
+    imu9_gyro_label = NULL;
+    imu9_mag_label = NULL;
+    hex_mode_label = NULL;
+    hex_gait_label = NULL;
+    hex_control_label = NULL;
+    hex_motion_label = NULL;
+    hex_shape_label = NULL;
+    hex_timing_label = NULL;
+    hex_tune_label = NULL;
+    hex_fault_label = NULL;
+    hex_freshness_label = NULL;
 }
 
 
@@ -249,7 +348,7 @@ static void create_imu9_panel(void) {
 
 static void create_page_indicator(void) {
     page_indicator = lv_obj_create(ui_TelemetryScreen);
-    lv_obj_set_size(page_indicator, num_panels * 12, 8);
+    lv_obj_set_size(page_indicator, num_panels * 24, 10);
     lv_obj_align(page_indicator, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_set_style_bg_opa(page_indicator, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(page_indicator, 0, 0);
@@ -257,6 +356,7 @@ static void create_page_indicator(void) {
     lv_obj_remove_flag(page_indicator, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(page_indicator, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(page_indicator, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(page_indicator, 5, 0);
     
     for (int i = 0; i < num_panels; i++) {
         page_dots[i] = lv_obj_create(page_indicator);
@@ -285,13 +385,14 @@ void ui_create_telemetry_screen(lv_obj_t *parent) {
     lv_obj_add_flag(ui_TelemetryScreen, LV_OBJ_FLAG_HIDDEN);
     printf("Telemetry: Screen obj created\r\n");
     
-    // Main scrollable container
+    // Main scrollable container - no padding so pages align exactly to
+    // UI_SCREEN_WIDTH multiples (keeps panels centered when snapping)
     panel_container = lv_obj_create(ui_TelemetryScreen);
     lv_obj_set_size(panel_container, UI_SCREEN_WIDTH, UI_CONTENT_HEIGHT - 10);
     lv_obj_align(panel_container, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_bg_opa(panel_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(panel_container, 0, 0);
-    lv_obj_set_style_pad_all(panel_container, 4, 0);
+    lv_obj_set_style_pad_all(panel_container, 0, 0);
     printf("Telemetry: Panel container created\r\n");
     
     // Enable horizontal scrolling
@@ -318,54 +419,29 @@ void ui_telemetry_refresh_for_profile(RobotProfile_t profile) {
         return;
     }
     
+    if (profile == active_profile && num_panels > 0) {
+        return;
+    }
+
     active_profile = profile;
-    
-    // Only rebuild panels if they haven't been created yet
-    // (first time initialization)
-    if (num_panels == 0 && panel_container) {
-        printf("Telemetry refresh: Creating common panels...\r\n");
-        
-        // Reset element pointers
-        status_rssi_val = NULL;
-        status_latency_val = NULL;
-        status_errors_val = NULL;
-        status_uptime_val = NULL;
-        status_battery_val = NULL;
-        status_link_icon = NULL;
-        log_textarea = NULL;
-        imu9_panel = NULL;
-        imu9_accel_label = NULL;
-        imu9_gyro_label = NULL;
-        imu9_mag_label = NULL;
-        
-        // Common panels for all profiles
-        create_status_panel();
-        create_log_panel();
-        
-        // Always create IMU9 panel (will be shown/hidden based on profile)
-        create_imu9_panel();
-        
-        // Position panels (initially position all)
-        for (int i = 0; i < num_panels; i++) {
-            if (panels[i]) {
-                lv_obj_set_pos(panels[i], i * UI_SCREEN_WIDTH + 4, 0);
-            }
-        }
-        
-        // Create page indicator
-        create_page_indicator();
+    if (panel_container) {
+        lv_obj_clean(panel_container);
     }
-    
-    // Show/hide IMU9 panel based on profile
-    if (imu9_panel) {
-        if (profile == ROBOT_PROFILE_HEXAPOD) {
-            lv_obj_remove_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
-            printf("Telemetry: IMU9 panel shown\r\n");
-        } else {
-            lv_obj_add_flag(imu9_panel, LV_OBJ_FLAG_HIDDEN);
-            printf("Telemetry: IMU9 panel hidden\r\n");
-        }
+    if (page_indicator) {
+        lv_obj_delete(page_indicator);
+        page_indicator = NULL;
     }
+    reset_panel_widgets();
+
+    create_status_panel();
+    if (profile == ROBOT_PROFILE_HEXAPOD) {
+        create_hexapod_panel();
+    }
+    create_imu9_panel(profile == ROBOT_PROFILE_HEXAPOD ? "Robot IMU" :
+                                                            "Remote IMU");
+    create_log_panel();
+    create_page_indicator();
+    lv_obj_scroll_to_x(panel_container, 0, LV_ANIM_OFF);
     
     printf("Telemetry: Configured for %s profile\r\n", 
            Settings_GetRobotProfileName(profile));
@@ -412,6 +488,28 @@ void ui_telemetry_update_status(int rssi, int latency, int errors, uint32_t upti
     }
 }
 
+void ui_telemetry_update_battery(float voltage, bool valid, bool fresh) {
+    if (!status_battery_val) return;
+    char buf[20];
+    if (!valid) {
+        lv_label_set_text(status_battery_val, "-- V");
+        lv_obj_set_style_text_color(status_battery_val,
+                                    lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        return;
+    }
+    snprintf(buf, sizeof(buf), "%.1f V", (double)voltage);
+    lv_label_set_text(status_battery_val, buf);
+    if (!fresh) {
+        lv_obj_set_style_text_color(status_battery_val,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        return;
+    }
+    lv_obj_set_style_text_color(status_battery_val,
+                                voltage >= 10.5f
+                                    ? lv_color_hex(UI_COLOR_ACCENT_GREEN)
+                                    : lv_color_hex(UI_COLOR_ACCENT_RED), 0);
+}
+
 void ui_telemetry_add_log(const char *message) {
     if (!log_textarea) return;
     
@@ -438,25 +536,208 @@ void ui_telemetry_add_log(const char *message) {
     lv_textarea_set_cursor_pos(log_textarea, LV_TEXTAREA_CURSOR_LAST);
 }
 
-void ui_telemetry_update_imu9(float ax, float ay, float az, 
+void ui_telemetry_update_imu9(float ax, float ay, float az,
                               float gx, float gy, float gz,
                               float mx, float my, float mz) {
     char buf[48];
-    
-    // Update the simplified 3-label display
+
+    // Row 1: BNO085 rotation-vector Euler angles (pitch, roll, yaw)
     if (imu9_accel_label) {
-        snprintf(buf, sizeof(buf), "Accel: %.2f, %.2f, %.2f", (double)ax, (double)ay, (double)az);
+        snprintf(buf, sizeof(buf), "Euler: P%.1f R%.1f Y%.1f",
+                 (double)ax, (double)ay, (double)az);
         lv_label_set_text(imu9_accel_label, buf);
     }
-    
+
+    // Row 2: BNO085 rotation-vector quality for the Hexapod profile.
     if (imu9_gyro_label) {
-        snprintf(buf, sizeof(buf), "Gyro:  %.2f, %.2f, %.2f", (double)gx, (double)gy, (double)gz);
+        if (active_profile == ROBOT_PROFILE_HEXAPOD) {
+            snprintf(buf, sizeof(buf), "Quality: %.0f/3", (double)gx);
+        } else {
+            snprintf(buf, sizeof(buf), "Cal:   S%.0f G%.0f A%.0f",
+                     (double)gx, (double)gy, (double)gz);
+        }
         lv_label_set_text(imu9_gyro_label, buf);
     }
-    
+
+    // Row 3: Link info (voltage, LQ%, SNR)
     if (imu9_mag_label) {
-        snprintf(buf, sizeof(buf), "Mag:   %.2f, %.2f, %.2f", (double)mx, (double)my, (double)mz);
+        snprintf(buf, sizeof(buf), "Link:  %.1fV LQ%.0f%% SNR%.0f",
+                 (double)mx, (double)my, (double)mz);
         lv_label_set_text(imu9_mag_label, buf);
+    }
+}
+
+void ui_telemetry_set_imu_state(bool present, bool fresh) {
+    if (!imu9_accel_label) return;
+    if (fresh) {
+        lv_obj_set_style_text_color(imu9_accel_label,
+                                    lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        if (imu9_gyro_label) {
+            lv_obj_set_style_text_color(imu9_gyro_label,
+                                        lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        }
+        if (imu9_mag_label) {
+            lv_obj_set_style_text_color(imu9_mag_label,
+                                        lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        }
+        return;
+    }
+    if (present) {
+        lv_obj_set_style_text_color(imu9_accel_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        if (imu9_gyro_label) {
+            lv_obj_set_style_text_color(imu9_gyro_label,
+                                        lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        }
+        if (imu9_mag_label) {
+            lv_obj_set_style_text_color(imu9_mag_label,
+                                        lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        }
+        return;
+    }
+    const char *missing = active_profile == ROBOT_PROFILE_HEXAPOD
+                              ? "No robot IMU detected"
+                              : "No IMU telemetry";
+    lv_label_set_text(imu9_accel_label, missing);
+    if (imu9_gyro_label) lv_label_set_text(imu9_gyro_label, "Cal:   -- -- --");
+    if (imu9_mag_label) lv_label_set_text(imu9_mag_label, "Link:  waiting");
+}
+
+static void set_hex_value_color(uint32_t color) {
+    lv_obj_t *values[] = {hex_mode_label, hex_gait_label, hex_control_label,
+                          hex_motion_label, hex_shape_label, hex_timing_label,
+                          hex_tune_label, hex_fault_label};
+    for (uint8_t index = 0; index < sizeof(values) / sizeof(values[0]); ++index) {
+        if (values[index]) {
+            lv_obj_set_style_text_color(values[index], lv_color_hex(color), 0);
+        }
+    }
+}
+
+void ui_telemetry_update_hexapod(const HexapodTelemetryStatus *status,
+                                 bool fresh, uint32_t age_ms) {
+    if (active_profile != ROBOT_PROFILE_HEXAPOD || !hex_freshness_label) {
+        return;
+    }
+
+    char buf[64];
+    if (!status) {
+        lv_label_set_text(hex_freshness_label, "Waiting");
+        lv_obj_set_style_text_color(hex_freshness_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+        lv_label_set_text(hex_mode_label, "--");
+        lv_label_set_text(hex_gait_label, "--");
+        lv_label_set_text(hex_control_label, "--");
+        lv_label_set_text(hex_motion_label, "--");
+        lv_label_set_text(hex_shape_label, "--");
+        lv_label_set_text(hex_timing_label, "--");
+        lv_label_set_text(hex_tune_label, "--");
+        lv_label_set_text(hex_fault_label, "--");
+        return;
+    }
+
+    if (fresh) {
+        snprintf(buf, sizeof(buf), "%lums", (unsigned long)age_ms);
+    } else {
+        snprintf(buf, sizeof(buf), "Stale %lums", (unsigned long)age_ms);
+    }
+    lv_label_set_text(hex_freshness_label, buf);
+    lv_obj_set_style_text_color(hex_freshness_label,
+                                lv_color_hex(fresh ? UI_COLOR_ACCENT_GREEN
+                                                   : UI_COLOR_ACCENT_ORANGE), 0);
+    set_hex_value_color(fresh ? UI_COLOR_TEXT_PRIMARY
+                              : UI_COLOR_ACCENT_ORANGE);
+    lv_label_set_text(hex_mode_label,
+                      hexapod_safety_state_name(status->safety_state));
+    lv_label_set_text(hex_gait_label, hexapod_gait_name(status->gait));
+    snprintf(buf, sizeof(buf), "%s / %s",
+             hexapod_control_mode_name(status->control_mode),
+             hexapod_command_source_name(status->command_source));
+    lv_label_set_text(hex_control_label, buf);
+    snprintf(buf, sizeof(buf), "%s / %s",
+             (status->flags & HEXAPOD_FLAG_ARMED) ? "Armed" : "Disarmed",
+             (status->flags & HEXAPOD_FLAG_MOTION_GATE) ? "Active" : "Held");
+    lv_label_set_text(hex_motion_label, buf);
+    snprintf(buf, sizeof(buf), "H%u S%u Z%u mm", status->body_height_mm,
+             status->stride_mm, status->step_height_mm);
+    lv_label_set_text(hex_shape_label, buf);
+    snprintf(buf, sizeof(buf), "%u%% / duty %u%%",
+             (unsigned)((status->speed_x255 * 100u + 127u) / 255u),
+             (unsigned)((status->duty_x255 * 100u + 127u) / 255u));
+    lv_label_set_text(hex_timing_label, buf);
+
+    // Gait-tune editor: show which parameter NAV1 is editing and its live
+    // value, so the handset mirrors what leg 1 is demonstrating on the robot.
+    const uint8_t tune_param = hexapod_tune_param(status);
+    if (status->tune_flags & HEXAPOD_TUNE_ACTIVE) {
+        unsigned value = 0;
+        const char *unit = "mm";
+        switch (tune_param) {
+            case HEXAPOD_TUNE_PARAM_STRIDE:
+                value = status->stride_mm;
+                break;
+            case HEXAPOD_TUNE_PARAM_DUTY:
+                value = (status->duty_x255 * 100u + 127u) / 255u;
+                unit = "%";
+                break;
+            case HEXAPOD_TUNE_PARAM_STEP_HEIGHT:
+            default:
+                value = status->step_height_mm;
+                break;
+        }
+        snprintf(buf, sizeof(buf), "%s %u%s%s%s",
+                 hexapod_tune_param_name(tune_param), value, unit,
+                 (status->tune_flags & HEXAPOD_TUNE_PREVIEW) ? " LEG1" : "",
+                 (status->tune_flags & HEXAPOD_TUNE_SAVE_PENDING) ? " SAVE" : "");
+        lv_label_set_text(hex_tune_label, buf);
+        lv_obj_set_style_text_color(hex_tune_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    } else if (status->tune_flags & HEXAPOD_TUNE_CFG_VOLATILE) {
+        lv_label_set_text(hex_tune_label, "Off / not stored");
+        lv_obj_set_style_text_color(hex_tune_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_ORANGE), 0);
+    } else {
+        lv_label_set_text(hex_tune_label, "Off");
+    }
+
+    if (!fresh) {
+        return;
+    }
+    // One deduplicated error line: the journal on the robot collapses repeats
+    // into a running count, so this row never scrolls with noise.
+    if ((status->flags & HEXAPOD_FLAG_FAULT) != 0 || status->fault_reason != 0) {
+        snprintf(buf, sizeof(buf), "FAULT %s",
+                 hexapod_fault_name(status->fault_reason));
+        lv_label_set_text(hex_fault_label, buf);
+        lv_obj_set_style_text_color(hex_fault_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_RED), 0);
+    } else if (status->error_code != 0) {
+        const uint8_t severity = hexapod_error_severity(status);
+        if (status->error_count > 1) {
+            snprintf(buf, sizeof(buf), "%s/%u x%u",
+                     hexapod_error_name(status->error_code),
+                     (unsigned)status->error_detail,
+                     (unsigned)status->error_count);
+        } else {
+            snprintf(buf, sizeof(buf), "%s/%u",
+                     hexapod_error_name(status->error_code),
+                     (unsigned)status->error_detail);
+        }
+        lv_label_set_text(hex_fault_label, buf);
+        lv_obj_set_style_text_color(
+            hex_fault_label,
+            lv_color_hex(severity >= 2 ? UI_COLOR_ACCENT_RED
+                                       : UI_COLOR_ACCENT_ORANGE), 0);
+    } else {
+        if ((status->flags & HEXAPOD_FLAG_BATTERY_VALID) != 0) {
+            snprintf(buf, sizeof(buf), "None / %.1fV",
+                     (double)status->battery_mv / 1000.0);
+        } else {
+            snprintf(buf, sizeof(buf), "None / --V");
+        }
+        lv_label_set_text(hex_fault_label, buf);
+        lv_obj_set_style_text_color(hex_fault_label,
+                                    lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
     }
 }
 

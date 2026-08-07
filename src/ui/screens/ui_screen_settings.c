@@ -1,5 +1,7 @@
 #include "ui_screen_settings.h"
 #include "ui_screen_telemetry.h"
+#include "ui_screen_radio.h"
+#include "ui_settings_layout.h"
 #include "../ui_styles.h"
 #include "../ui_helpers.h"
 #include "../components/ui_chrome.h"
@@ -16,6 +18,7 @@ static lv_obj_t *menu_radio = NULL;
 static lv_obj_t *menu_robot = NULL;
 static lv_obj_t *menu_touch_cal = NULL;
 static lv_obj_t *menu_gimbal_cal = NULL;
+static lv_obj_t *menu_pot_cal = NULL;
 static lv_obj_t *menu_about = NULL;
 
 // Current menu state
@@ -49,6 +52,22 @@ static int16_t gimbal_cal_current_value = 0;   // Current live reading
 static int16_t gimbal_cal_recorded[4][3] = {{0}}; // [axis][center/min/max]
 static const char *gimbal_axis_names[] = {"Left X", "Left Y", "Right X", "Right Y"};
 
+// Pot calibration UI
+static lv_obj_t *pot_labels[2] = {NULL};
+
+// Pot calibration state (mirrors the gimbal wizard: 2 pots x min/max steps)
+static bool pot_cal_active = false;
+static uint8_t pot_cal_index = 0;          // Current pot being calibrated (0-1)
+static uint8_t pot_cal_step = 0;           // 0=min, 1=max
+static lv_obj_t *pot_cal_instruction = NULL;
+static lv_obj_t *pot_cal_value_label = NULL;
+static lv_obj_t *pot_cal_bar = NULL;
+static lv_obj_t *pot_cal_continue_btn = NULL;
+static lv_obj_t *pot_cal_start_btn = NULL;
+static int16_t pot_cal_current_value = 0;      // Current live raw reading
+static int16_t pot_cal_recorded[2][2] = {{0}}; // [pot][min/max]
+static const char *pot_names[] = {"Pot 1", "Pot 2"};
+
 // Robot profile selection buttons and checkmarks
 static lv_obj_t *robot_profile_btns[ROBOT_PROFILE_COUNT] = {NULL};
 static lv_obj_t *robot_profile_checks[ROBOT_PROFILE_COUNT] = {NULL};
@@ -59,8 +78,45 @@ static void create_radio_menu(lv_obj_t *parent);
 static void create_robot_menu(lv_obj_t *parent);
 static void create_touch_cal_menu(lv_obj_t *parent);
 static void create_gimbal_cal_menu(lv_obj_t *parent);
+static void create_pot_cal_menu(lv_obj_t *parent);
 static void create_about_menu(lv_obj_t *parent);
 static void hide_all_menus(void);
+
+static void style_submenu_root(lv_obj_t *menu) {
+    lv_obj_set_size(menu, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_opa(menu, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(menu, 0, 0);
+    lv_obj_set_style_pad_all(menu, 0, 0);
+    lv_obj_add_flag(menu, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(menu, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+static lv_obj_t *create_scroll_body(lv_obj_t *parent) {
+    lv_obj_t *body = lv_obj_create(parent);
+    lv_obj_set_size(body, lv_pct(100), UI_CONTENT_HEIGHT - UI_SETTINGS_BODY_TOP);
+    lv_obj_set_pos(body, 0, UI_SETTINGS_BODY_TOP);
+    lv_obj_set_style_bg_opa(body, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(body, 0, 0);
+    lv_obj_set_style_pad_all(body, UI_SETTINGS_PAGE_PAD, 0);
+    lv_obj_set_style_pad_row(body, UI_SETTINGS_GAP, 0);
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(body, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
+    return body;
+}
+
+static lv_obj_t *create_action_slot(lv_obj_t *parent) {
+    lv_obj_t *slot = lv_obj_create(parent);
+    lv_obj_set_size(slot, lv_pct(100), UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_set_style_bg_opa(slot, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(slot, 0, 0);
+    lv_obj_set_style_pad_all(slot, 0, 0);
+    lv_obj_remove_flag(slot, LV_OBJ_FLAG_SCROLLABLE);
+    return slot;
+}
 
 //=============================================================================
 // Event Callbacks
@@ -133,13 +189,18 @@ static void gimbal_cal_start_cb(lv_event_t *e);
 static void gimbal_cal_continue_cb(lv_event_t *e);
 static void gimbal_cal_update_ui(void);
 
+// Pot calibration callbacks
+static void pot_cal_start_cb(lv_event_t *e);
+static void pot_cal_continue_cb(lv_event_t *e);
+static void pot_cal_update_ui(void);
+
 //=============================================================================
 // Menu Creation
 //=============================================================================
 
 static lv_obj_t* create_back_header(lv_obj_t *parent, const char *title) {
     lv_obj_t *header = lv_obj_create(parent);
-    lv_obj_set_size(header, lv_pct(100), 26);
+    lv_obj_set_size(header, lv_pct(100), UI_SETTINGS_HEADER_HEIGHT);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(header, 0, 0);
@@ -147,9 +208,13 @@ static lv_obj_t* create_back_header(lv_obj_t *parent, const char *title) {
     lv_obj_remove_flag(header, LV_OBJ_FLAG_SCROLLABLE);
     
     lv_obj_t *back = lv_button_create(header);
-    lv_obj_set_size(back, 50, 22);
-    lv_obj_align(back, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_size(back, 62, 28);
+    lv_obj_align(back, LV_ALIGN_LEFT_MID, 6, 0);
     lv_obj_add_style(back, &style_card, 0);
+    lv_obj_set_style_radius(back, 6, 0);
+    lv_obj_set_style_pad_hor(back, 8, 0);
+    lv_obj_set_style_pad_ver(back, 0, 0);
+    lv_obj_add_flag(back, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     lv_obj_add_event_cb(back, back_btn_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *back_lbl = lv_label_create(back);
@@ -160,7 +225,7 @@ static lv_obj_t* create_back_header(lv_obj_t *parent, const char *title) {
     lv_obj_t *title_lbl = lv_label_create(header);
     lv_label_set_text(title_lbl, title);
     lv_obj_add_style(title_lbl, &style_text_primary, 0);
-    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align(title_lbl, LV_ALIGN_CENTER, 10, 0);
     
     return header;
@@ -172,7 +237,13 @@ static void create_main_menu(lv_obj_t *parent) {
     lv_obj_set_style_bg_opa(menu_main, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(menu_main, 0, 0);
     lv_obj_set_style_pad_all(menu_main, 6, 0);
-    lv_obj_remove_flag(menu_main, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_pad_row(menu_main, 8, 0);
+    lv_obj_set_flex_flow(menu_main, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(menu_main, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_add_flag(menu_main, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(menu_main, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(menu_main, LV_SCROLLBAR_MODE_AUTO);
     
     typedef struct {
         const char *icon;
@@ -185,18 +256,19 @@ static void create_main_menu(lv_obj_t *parent) {
         {LV_SYMBOL_DIRECTORY, "Robot Profile", SETTINGS_MENU_ROBOT},
         {LV_SYMBOL_GPS, "Touch Calibration", SETTINGS_MENU_TOUCH_CAL},
         {LV_SYMBOL_REFRESH, "Gimbal Calibration", SETTINGS_MENU_GIMBAL_CAL},
+        {LV_SYMBOL_SETTINGS, "Pot Calibration", SETTINGS_MENU_POT_CAL},
         {LV_SYMBOL_FILE, "About", SETTINGS_MENU_ABOUT},
     };
     int n = sizeof(items) / sizeof(items[0]);
     
     for (int i = 0; i < n; i++) {
         lv_obj_t *btn = lv_button_create(menu_main);
-        lv_obj_set_size(btn, lv_pct(98), 28);
-        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 2 + i * 32);
+        lv_obj_set_size(btn, lv_pct(98), 34);
         lv_obj_add_style(btn, &style_card, 0);
-        lv_obj_set_style_radius(btn, 8, 0);
+        lv_obj_set_style_radius(btn, 6, 0);
         lv_obj_set_style_pad_left(btn, 12, 0);
         lv_obj_set_style_pad_right(btn, 8, 0);
+        lv_obj_add_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         lv_obj_add_event_cb(btn, menu_btn_cb, LV_EVENT_CLICKED, (void*)(intptr_t)items[i].menu);
         
         // Icon on the left with accent color
@@ -223,84 +295,30 @@ static void create_main_menu(lv_obj_t *parent) {
 
 static void create_radio_menu(lv_obj_t *parent) {
     menu_radio = lv_obj_create(parent);
-    lv_obj_set_size(menu_radio, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_opa(menu_radio, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(menu_radio, 0, 0);
-    lv_obj_set_style_pad_all(menu_radio, 4, 0);
-    lv_obj_add_flag(menu_radio, LV_OBJ_FLAG_HIDDEN);
+    style_submenu_root(menu_radio);
     
     create_back_header(menu_radio, "Radio (ELRS)");
     
-    const Settings_t *s = Settings_Get();
-    int y = 30;
-    
-    // Packet Rate
-    lv_obj_t *rate_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(rate_lbl, "Packet Rate:");
-    lv_obj_add_style(rate_lbl, &style_text_secondary, 0);
-    lv_obj_align(rate_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *rate_val = lv_label_create(menu_radio);
-    lv_label_set_text(rate_val, Settings_GetPacketRateName(s->radio.packet_rate));
-    lv_obj_add_style(rate_val, &style_text_primary, 0);
-    lv_obj_align(rate_val, LV_ALIGN_TOP_RIGHT, -4, y);
-    y += 22;
-    
-    // TX Power
-    lv_obj_t *pwr_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(pwr_lbl, "TX Power:");
-    lv_obj_add_style(pwr_lbl, &style_text_secondary, 0);
-    lv_obj_align(pwr_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *pwr_val = lv_label_create(menu_radio);
-    lv_label_set_text(pwr_val, Settings_GetTxPowerName(s->radio.tx_power));
-    lv_obj_add_style(pwr_val, &style_text_primary, 0);
-    lv_obj_align(pwr_val, LV_ALIGN_TOP_RIGHT, -4, y);
-    y += 22;
-    
-    // Telemetry
-    lv_obj_t *telem_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(telem_lbl, "Telemetry:");
-    lv_obj_add_style(telem_lbl, &style_text_secondary, 0);
-    lv_obj_align(telem_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *telem_val = lv_label_create(menu_radio);
-    lv_label_set_text(telem_val, Settings_GetTelemetryRatioName(s->radio.telemetry_ratio));
-    lv_obj_add_style(telem_val, &style_text_primary, 0);
-    lv_obj_align(telem_val, LV_ALIGN_TOP_RIGHT, -4, y);
-    y += 22;
-    
-    // Bind Phrase
-    lv_obj_t *bind_lbl = lv_label_create(menu_radio);
-    lv_label_set_text(bind_lbl, "Bind Phrase:");
-    lv_obj_add_style(bind_lbl, &style_text_secondary, 0);
-    lv_obj_align(bind_lbl, LV_ALIGN_TOP_LEFT, 4, y);
-    
-    lv_obj_t *bind_val = lv_label_create(menu_radio);
-    lv_label_set_text(bind_val, s->radio.bind_phrase);
-    lv_obj_add_style(bind_val, &style_text_primary, 0);
-    lv_obj_align(bind_val, LV_ALIGN_TOP_RIGHT, -4, y);
+    // Dynamic ExpressLRS configuration UI (discovered from the module)
+    ui_radio_menu_create(menu_radio);
 }
 
 static void create_robot_menu(lv_obj_t *parent) {
     menu_robot = lv_obj_create(parent);
-    lv_obj_set_size(menu_robot, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_opa(menu_robot, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(menu_robot, 0, 0);
-    lv_obj_set_style_pad_all(menu_robot, 4, 0);
-    lv_obj_add_flag(menu_robot, LV_OBJ_FLAG_HIDDEN);
+    style_submenu_root(menu_robot);
     
     create_back_header(menu_robot, "Robot Profile");
+    lv_obj_t *body = create_scroll_body(menu_robot);
     
     const char *profiles[] = {"Generic", "Hexapod"};
     
     const Settings_t *s = Settings_Get();
     
     for (int i = 0; i < ROBOT_PROFILE_COUNT; i++) {
-        lv_obj_t *btn = lv_button_create(menu_robot);
-        lv_obj_set_size(btn, lv_pct(95), 36);
-        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 30 + i * 44);
-        lv_obj_set_style_radius(btn, 8, 0);
+        lv_obj_t *btn = lv_button_create(body);
+        lv_obj_set_size(btn, lv_pct(98), UI_SETTINGS_TOUCH_HEIGHT);
+        lv_obj_set_style_radius(btn, 6, 0);
+        lv_obj_add_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
         lv_obj_add_event_cb(btn, robot_select_cb, LV_EVENT_CLICKED, (void*)(intptr_t)i);
         
         // Store button reference
@@ -327,25 +345,23 @@ static void create_robot_menu(lv_obj_t *parent) {
 
 static void create_touch_cal_menu(lv_obj_t *parent) {
     menu_touch_cal = lv_obj_create(parent);
-    lv_obj_set_size(menu_touch_cal, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_opa(menu_touch_cal, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(menu_touch_cal, 0, 0);
-    lv_obj_set_style_pad_all(menu_touch_cal, 0, 0);
-    lv_obj_add_flag(menu_touch_cal, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(menu_touch_cal, LV_OBJ_FLAG_SCROLLABLE);
+    style_submenu_root(menu_touch_cal);
     
     create_back_header(menu_touch_cal, "Touch Calibration");
+    lv_obj_t *body = create_scroll_body(menu_touch_cal);
     
-    touch_cal_label = lv_label_create(menu_touch_cal);
+    touch_cal_label = lv_label_create(body);
     lv_label_set_text(touch_cal_label, "Press Start, then tap the\ncrosshairs that appear.");
     lv_obj_add_style(touch_cal_label, &style_text_secondary, 0);
+    lv_obj_set_width(touch_cal_label, lv_pct(100));
+    lv_label_set_long_mode(touch_cal_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(touch_cal_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(touch_cal_label, LV_ALIGN_CENTER, 0, -15);
     
-    touch_cal_start_btn = lv_button_create(menu_touch_cal);
-    lv_obj_set_size(touch_cal_start_btn, 100, 28);
-    lv_obj_align(touch_cal_start_btn, LV_ALIGN_CENTER, 0, 25);
+    touch_cal_start_btn = lv_button_create(body);
+    lv_obj_set_size(touch_cal_start_btn, 140, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_set_style_radius(touch_cal_start_btn, 6, 0);
     lv_obj_set_style_bg_color(touch_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_add_flag(touch_cal_start_btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
     lv_obj_add_event_cb(touch_cal_start_btn, touch_cal_start_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *start_lbl = lv_label_create(touch_cal_start_btn);
@@ -363,7 +379,9 @@ static void create_touch_cal_menu(lv_obj_t *parent) {
     
     // Transparent overlay to capture touch events during calibration
     touch_cal_overlay = lv_obj_create(menu_touch_cal);
-    lv_obj_set_size(touch_cal_overlay, lv_pct(100), lv_pct(100));
+    lv_obj_set_size(touch_cal_overlay, lv_pct(100),
+                    UI_CONTENT_HEIGHT - UI_SETTINGS_BODY_TOP);
+    lv_obj_set_pos(touch_cal_overlay, 0, UI_SETTINGS_BODY_TOP);
     lv_obj_set_style_bg_opa(touch_cal_overlay, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(touch_cal_overlay, 0, 0);
     lv_obj_remove_flag(touch_cal_overlay, LV_OBJ_FLAG_SCROLLABLE);
@@ -374,49 +392,78 @@ static void create_touch_cal_menu(lv_obj_t *parent) {
 
 static void create_gimbal_cal_menu(lv_obj_t *parent) {
     menu_gimbal_cal = lv_obj_create(parent);
-    lv_obj_set_size(menu_gimbal_cal, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_opa(menu_gimbal_cal, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(menu_gimbal_cal, 0, 0);
-    lv_obj_set_style_pad_all(menu_gimbal_cal, 4, 0);
-    lv_obj_add_flag(menu_gimbal_cal, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(menu_gimbal_cal, LV_OBJ_FLAG_SCROLLABLE);
+    style_submenu_root(menu_gimbal_cal);
     
     create_back_header(menu_gimbal_cal, "Gimbal Calibration");
+    lv_obj_t *body = create_scroll_body(menu_gimbal_cal);
     
     // Instruction label - centered, shows current step (includes axis name)
-    gimbal_cal_instruction = lv_label_create(menu_gimbal_cal);
+    gimbal_cal_instruction = lv_label_create(body);
     lv_label_set_text(gimbal_cal_instruction, "Press Start to calibrate\nall gimbal axes.");
     lv_obj_add_style(gimbal_cal_instruction, &style_text_secondary, 0);
+    lv_obj_set_width(gimbal_cal_instruction, lv_pct(100));
+    lv_label_set_long_mode(gimbal_cal_instruction, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_align(gimbal_cal_instruction, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(gimbal_cal_instruction, LV_ALIGN_TOP_MID, 0, 28);
     
     // Axis name label - not used separately anymore (integrated in instruction)
-    gimbal_cal_axis_label = lv_label_create(menu_gimbal_cal);
+    gimbal_cal_axis_label = lv_label_create(body);
     lv_label_set_text(gimbal_cal_axis_label, "");
     lv_obj_add_flag(gimbal_cal_axis_label, LV_OBJ_FLAG_HIDDEN);  // Always hidden
     
+    lv_obj_t *live_panel = lv_obj_create(body);
+    lv_obj_set_size(live_panel, lv_pct(100), 40);
+    lv_obj_set_style_bg_opa(live_panel, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(live_panel, 0, 0);
+    lv_obj_set_style_pad_all(live_panel, 0, 0);
+    lv_obj_remove_flag(live_panel, LV_OBJ_FLAG_SCROLLABLE);
+
     // Live value bar - centered, prominent
-    gimbal_cal_bar = lv_bar_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_bar, 200, 14);
-    lv_obj_align(gimbal_cal_bar, LV_ALIGN_CENTER, 0, -5);
+    gimbal_cal_bar = lv_bar_create(live_panel);
+    lv_obj_set_size(gimbal_cal_bar, 220, 14);
+    lv_obj_align(gimbal_cal_bar, LV_ALIGN_TOP_MID, 0, 2);
     lv_bar_set_range(gimbal_cal_bar, 0, 4095);
     lv_bar_set_value(gimbal_cal_bar, 2048, LV_ANIM_OFF);
     lv_obj_add_flag(gimbal_cal_bar, LV_OBJ_FLAG_HIDDEN);
     
     // Live value label - below bar, shows raw value
-    gimbal_cal_value_label = lv_label_create(menu_gimbal_cal);
+    gimbal_cal_value_label = lv_label_create(live_panel);
     lv_label_set_text(gimbal_cal_value_label, "2048");
     lv_obj_add_style(gimbal_cal_value_label, &style_text_secondary, 0);
-    lv_obj_align(gimbal_cal_value_label, LV_ALIGN_CENTER, 0, 12);
+    lv_obj_align(gimbal_cal_value_label, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_add_flag(gimbal_cal_value_label, LV_OBJ_FLAG_HIDDEN);
-    
-    // Compact status row at bottom - shows all 4 values in one line
-    gimbal_cal_status_panel = lv_obj_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_status_panel, lv_pct(95), 24);
-    lv_obj_align(gimbal_cal_status_panel, LV_ALIGN_BOTTOM_MID, 0, -4);
+
+    lv_obj_t *action_slot = create_action_slot(body);
+
+    // Start and Record share one stable action slot.
+    gimbal_cal_start_btn = lv_button_create(action_slot);
+    lv_obj_set_size(gimbal_cal_start_btn, 140, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_center(gimbal_cal_start_btn);
+    lv_obj_set_style_radius(gimbal_cal_start_btn, 6, 0);
+    lv_obj_set_style_bg_color(gimbal_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_add_event_cb(gimbal_cal_start_btn, gimbal_cal_start_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *start_lbl = lv_label_create(gimbal_cal_start_btn);
+    lv_label_set_text(start_lbl, LV_SYMBOL_PLAY " Start");
+    lv_obj_center(start_lbl);
+
+    gimbal_cal_continue_btn = lv_button_create(action_slot);
+    lv_obj_set_size(gimbal_cal_continue_btn, 140, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_center(gimbal_cal_continue_btn);
+    lv_obj_set_style_radius(gimbal_cal_continue_btn, 6, 0);
+    lv_obj_set_style_bg_color(gimbal_cal_continue_btn, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+    lv_obj_add_event_cb(gimbal_cal_continue_btn, gimbal_cal_continue_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_flag(gimbal_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *cont_lbl = lv_label_create(gimbal_cal_continue_btn);
+    lv_label_set_text(cont_lbl, LV_SYMBOL_OK " Record");
+    lv_obj_center(cont_lbl);
+
+    // Compact status row - shows all 4 values in one line
+    gimbal_cal_status_panel = lv_obj_create(body);
+    lv_obj_set_size(gimbal_cal_status_panel, lv_pct(100), 28);
     lv_obj_set_style_bg_color(gimbal_cal_status_panel, lv_color_hex(UI_COLOR_BG_CARD), 0);
     lv_obj_set_style_radius(gimbal_cal_status_panel, 4, 0);
-    lv_obj_set_style_pad_all(gimbal_cal_status_panel, 2, 0);
+    lv_obj_set_style_pad_all(gimbal_cal_status_panel, 4, 0);
     lv_obj_remove_flag(gimbal_cal_status_panel, LV_OBJ_FLAG_SCROLLABLE);
     
     // Create compact horizontal status: LX: val  LY: val  RX: val  RY: val
@@ -438,28 +485,6 @@ static void create_gimbal_cal_menu(lv_obj_t *parent) {
         gimbal_bars[i] = NULL;
     }
     
-    // Start button - centered
-    gimbal_cal_start_btn = lv_button_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_start_btn, 100, 28);
-    lv_obj_align(gimbal_cal_start_btn, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(gimbal_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
-    lv_obj_add_event_cb(gimbal_cal_start_btn, gimbal_cal_start_cb, LV_EVENT_CLICKED, NULL);
-    
-    lv_obj_t *start_lbl = lv_label_create(gimbal_cal_start_btn);
-    lv_label_set_text(start_lbl, LV_SYMBOL_PLAY " Start");
-    lv_obj_center(start_lbl);
-    
-    // Record button - below value label (hidden until calibration)
-    gimbal_cal_continue_btn = lv_button_create(menu_gimbal_cal);
-    lv_obj_set_size(gimbal_cal_continue_btn, 100, 28);
-    lv_obj_align(gimbal_cal_continue_btn, LV_ALIGN_CENTER, 0, 38);
-    lv_obj_set_style_bg_color(gimbal_cal_continue_btn, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
-    lv_obj_add_event_cb(gimbal_cal_continue_btn, gimbal_cal_continue_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_add_flag(gimbal_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
-    
-    lv_obj_t *cont_lbl = lv_label_create(gimbal_cal_continue_btn);
-    lv_label_set_text(cont_lbl, LV_SYMBOL_OK " Record");
-    lv_obj_center(cont_lbl);
 }
 
 // Gimbal calibration start callback
@@ -492,31 +517,138 @@ static void gimbal_cal_update_ui(void) {
     lv_label_set_text(gimbal_cal_instruction, buf);
 }
 
+static void create_pot_cal_menu(lv_obj_t *parent) {
+    menu_pot_cal = lv_obj_create(parent);
+    style_submenu_root(menu_pot_cal);
+    
+    create_back_header(menu_pot_cal, "Pot Calibration");
+    lv_obj_t *body = create_scroll_body(menu_pot_cal);
+    
+    // Instruction label - centered, shows current step (includes pot name)
+    pot_cal_instruction = lv_label_create(body);
+    lv_label_set_text(pot_cal_instruction, "Press Start to calibrate\nboth potentiometers.");
+    lv_obj_add_style(pot_cal_instruction, &style_text_secondary, 0);
+    lv_obj_set_width(pot_cal_instruction, lv_pct(100));
+    lv_label_set_long_mode(pot_cal_instruction, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(pot_cal_instruction, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_t *live_panel = lv_obj_create(body);
+    lv_obj_set_size(live_panel, lv_pct(100), 40);
+    lv_obj_set_style_bg_opa(live_panel, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(live_panel, 0, 0);
+    lv_obj_set_style_pad_all(live_panel, 0, 0);
+    lv_obj_remove_flag(live_panel, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Live value bar - centered, prominent
+    pot_cal_bar = lv_bar_create(live_panel);
+    lv_obj_set_size(pot_cal_bar, 220, 14);
+    lv_obj_align(pot_cal_bar, LV_ALIGN_TOP_MID, 0, 2);
+    lv_bar_set_range(pot_cal_bar, 0, 32767);
+    lv_bar_set_value(pot_cal_bar, 0, LV_ANIM_OFF);
+    lv_obj_add_flag(pot_cal_bar, LV_OBJ_FLAG_HIDDEN);
+    
+    // Live value label - below bar, shows raw value
+    pot_cal_value_label = lv_label_create(live_panel);
+    lv_label_set_text(pot_cal_value_label, "0");
+    lv_obj_add_style(pot_cal_value_label, &style_text_secondary, 0);
+    lv_obj_align(pot_cal_value_label, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_add_flag(pot_cal_value_label, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *action_slot = create_action_slot(body);
+
+    pot_cal_start_btn = lv_button_create(action_slot);
+    lv_obj_set_size(pot_cal_start_btn, 140, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_center(pot_cal_start_btn);
+    lv_obj_set_style_radius(pot_cal_start_btn, 6, 0);
+    lv_obj_set_style_bg_color(pot_cal_start_btn, lv_color_hex(UI_COLOR_ACCENT_BLUE), 0);
+    lv_obj_add_event_cb(pot_cal_start_btn, pot_cal_start_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *start_lbl = lv_label_create(pot_cal_start_btn);
+    lv_label_set_text(start_lbl, LV_SYMBOL_PLAY " Start");
+    lv_obj_center(start_lbl);
+
+    pot_cal_continue_btn = lv_button_create(action_slot);
+    lv_obj_set_size(pot_cal_continue_btn, 140, UI_SETTINGS_TOUCH_HEIGHT);
+    lv_obj_center(pot_cal_continue_btn);
+    lv_obj_set_style_radius(pot_cal_continue_btn, 6, 0);
+    lv_obj_set_style_bg_color(pot_cal_continue_btn, lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+    lv_obj_add_event_cb(pot_cal_continue_btn, pot_cal_continue_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_flag(pot_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *cont_lbl = lv_label_create(pot_cal_continue_btn);
+    lv_label_set_text(cont_lbl, LV_SYMBOL_OK " Record");
+    lv_obj_center(cont_lbl);
+
+    // Compact status row - live raw for both pots
+    lv_obj_t *status_panel = lv_obj_create(body);
+    lv_obj_set_size(status_panel, lv_pct(100), 28);
+    lv_obj_set_style_bg_color(status_panel, lv_color_hex(UI_COLOR_BG_CARD), 0);
+    lv_obj_set_style_radius(status_panel, 4, 0);
+    lv_obj_set_style_pad_all(status_panel, 4, 0);
+    lv_obj_remove_flag(status_panel, LV_OBJ_FLAG_SCROLLABLE);
+    
+    static const char* pot_short[] = {"P1", "P2"};
+    for (int i = 0; i < 2; i++) {
+        int x = i * 110 + 4;
+        
+        lv_obj_t *name = lv_label_create(status_panel);
+        lv_label_set_text(name, pot_short[i]);
+        lv_obj_add_style(name, &style_text_small, 0);
+        lv_obj_set_pos(name, x, 4);
+        
+        pot_labels[i] = lv_label_create(status_panel);
+        lv_label_set_text(pot_labels[i], "----");
+        lv_obj_add_style(pot_labels[i], &style_text_small, 0);
+        lv_obj_set_pos(pot_labels[i], x + 22, 4);
+    }
+}
+
+// Pot calibration start callback
+static void pot_cal_start_cb(lv_event_t *e) {
+    (void)e;
+    ui_pot_cal_start();
+}
+
+// Pot calibration continue/record callback
+static void pot_cal_continue_cb(lv_event_t *e) {
+    (void)e;
+    ui_pot_cal_record_step();
+}
+
+// Update pot calibration UI based on current state
+static void pot_cal_update_ui(void) {
+    if (!pot_cal_active) return;
+    
+    const char *step_actions[] = {"turn fully to MIN", "turn fully to MAX"};
+    
+    char buf[80];
+    snprintf(buf, sizeof(buf), "%s (%d/2) - Step %d/2:\n%s",
+             pot_names[pot_cal_index],
+             pot_cal_index + 1,
+             pot_cal_step + 1,
+             step_actions[pot_cal_step]);
+    lv_label_set_text(pot_cal_instruction, buf);
+}
+
 static void create_about_menu(lv_obj_t *parent) {
     menu_about = lv_obj_create(parent);
-    lv_obj_set_size(menu_about, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_opa(menu_about, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(menu_about, 0, 0);
-    lv_obj_set_style_pad_all(menu_about, 4, 0);
-    lv_obj_add_flag(menu_about, LV_OBJ_FLAG_HIDDEN);
+    style_submenu_root(menu_about);
     
     create_back_header(menu_about, "About");
+    lv_obj_t *body = create_scroll_body(menu_about);
     
-    lv_obj_t *title = lv_label_create(menu_about);
+    lv_obj_t *title = lv_label_create(body);
     lv_label_set_text(title, "RC Controller");
     lv_obj_add_style(title, &style_text_primary, 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 36);
     
-    lv_obj_t *ver = lv_label_create(menu_about);
+    lv_obj_t *ver = lv_label_create(body);
     lv_label_set_text(ver, "Version 1.0.0");
     lv_obj_add_style(ver, &style_text_secondary, 0);
-    lv_obj_align(ver, LV_ALIGN_TOP_MID, 0, 54);
     
-    lv_obj_t *hw = lv_label_create(menu_about);
+    lv_obj_t *hw = lv_label_create(body);
     lv_label_set_text(hw, "ESP32-S3 + LVGL 9");
     lv_obj_add_style(hw, &style_text_secondary, 0);
-    lv_obj_align(hw, LV_ALIGN_TOP_MID, 0, 70);
 }
 
 static void hide_all_menus(void) {
@@ -525,6 +657,7 @@ static void hide_all_menus(void) {
     if (menu_robot) lv_obj_add_flag(menu_robot, LV_OBJ_FLAG_HIDDEN);
     if (menu_touch_cal) lv_obj_add_flag(menu_touch_cal, LV_OBJ_FLAG_HIDDEN);
     if (menu_gimbal_cal) lv_obj_add_flag(menu_gimbal_cal, LV_OBJ_FLAG_HIDDEN);
+    if (menu_pot_cal) lv_obj_add_flag(menu_pot_cal, LV_OBJ_FLAG_HIDDEN);
     if (menu_about) lv_obj_add_flag(menu_about, LV_OBJ_FLAG_HIDDEN);
     
     // Cancel touch calibration if leaving
@@ -556,6 +689,8 @@ void ui_create_settings_screen(lv_obj_t *parent) {
     create_touch_cal_menu(ui_SettingsScreen);
     printf("Settings: Creating gimbal cal menu...\r\n");
     create_gimbal_cal_menu(ui_SettingsScreen);
+    printf("Settings: Creating pot cal menu...\r\n");
+    create_pot_cal_menu(ui_SettingsScreen);
     printf("Settings: Creating about menu...\r\n");
     create_about_menu(ui_SettingsScreen);
     printf("Settings: All menus created\r\n");
@@ -573,6 +708,7 @@ void ui_settings_show_menu(SettingsMenu_t menu) {
             break;
         case SETTINGS_MENU_RADIO:
             lv_obj_remove_flag(menu_radio, LV_OBJ_FLAG_HIDDEN);
+            ui_radio_on_show();
             break;
         case SETTINGS_MENU_ROBOT:
             lv_obj_remove_flag(menu_robot, LV_OBJ_FLAG_HIDDEN);
@@ -583,6 +719,9 @@ void ui_settings_show_menu(SettingsMenu_t menu) {
         case SETTINGS_MENU_GIMBAL_CAL:
             lv_obj_remove_flag(menu_gimbal_cal, LV_OBJ_FLAG_HIDDEN);
             break;
+        case SETTINGS_MENU_POT_CAL:
+            lv_obj_remove_flag(menu_pot_cal, LV_OBJ_FLAG_HIDDEN);
+            break;
         case SETTINGS_MENU_ABOUT:
             lv_obj_remove_flag(menu_about, LV_OBJ_FLAG_HIDDEN);
             break;
@@ -592,6 +731,21 @@ void ui_settings_show_menu(SettingsMenu_t menu) {
 SettingsMenu_t ui_settings_get_current_menu(void) {
     return current_menu;
 }
+
+#ifdef SIMULATOR
+lv_obj_t *ui_settings_debug_menu_root(SettingsMenu_t menu) {
+    switch (menu) {
+        case SETTINGS_MENU_MAIN: return menu_main;
+        case SETTINGS_MENU_RADIO: return menu_radio;
+        case SETTINGS_MENU_ROBOT: return menu_robot;
+        case SETTINGS_MENU_TOUCH_CAL: return menu_touch_cal;
+        case SETTINGS_MENU_GIMBAL_CAL: return menu_gimbal_cal;
+        case SETTINGS_MENU_POT_CAL: return menu_pot_cal;
+        case SETTINGS_MENU_ABOUT: return menu_about;
+        default: return NULL;
+    }
+}
+#endif
 
 //=============================================================================
 // Touch Calibration
@@ -608,7 +762,7 @@ void ui_touch_cal_start(void) {
     
     // Show first target (top-left) - position matches positions[0] in record_point
     lv_obj_remove_flag(touch_cal_target, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_pos(touch_cal_target, 15, 35);
+    lv_obj_set_pos(touch_cal_target, 15, UI_SETTINGS_BODY_TOP + 8);
     lv_label_set_text(touch_cal_label, "Tap point 1 of 4\n(top-left)");
 }
 
@@ -622,10 +776,10 @@ void ui_touch_cal_record_point(int16_t raw_x, int16_t raw_y) {
     // Target positions: TL, TR, BR, BL (corners of calibration area)
     // Keep within visible content area (account for header at top)
     int16_t positions[4][2] = {
-        {15, 35},                               // Top-left
-        {UI_SCREEN_WIDTH - 45, 35},             // Top-right  
-        {UI_SCREEN_WIDTH - 45, 130},            // Bottom-right (well above nav bar)
-        {15, 130}                               // Bottom-left (well above nav bar)
+        {15, UI_SETTINGS_BODY_TOP + 8},          // Top-left
+        {UI_SCREEN_WIDTH - 45, UI_SETTINGS_BODY_TOP + 8}, // Top-right
+        {UI_SCREEN_WIDTH - 45, UI_CONTENT_HEIGHT - 38},   // Bottom-right
+        {15, UI_CONTENT_HEIGHT - 38}             // Bottom-left
     };
     const char *labels[] = {
         "Tap point 2 of 4\n(top-right)",
@@ -637,7 +791,6 @@ void ui_touch_cal_record_point(int16_t raw_x, int16_t raw_y) {
     if (touch_cal_point < 4) {
         lv_obj_set_pos(touch_cal_target, positions[touch_cal_point][0], positions[touch_cal_point][1]);
         lv_label_set_text(touch_cal_label, labels[touch_cal_point - 1]);
-        lv_obj_align(touch_cal_label, LV_ALIGN_CENTER, 0, 0);
     } else {
         // Calibration complete
         touch_cal_active = false;
@@ -645,7 +798,6 @@ void ui_touch_cal_record_point(int16_t raw_x, int16_t raw_y) {
         lv_obj_add_flag(touch_cal_overlay, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(touch_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
         lv_label_set_text(touch_cal_label, "Calibration complete!\nData saved.");
-        lv_obj_align(touch_cal_label, LV_ALIGN_CENTER, 0, -15);
         
         // Calculate and save calibration
         TouchCalibration_t cal;
@@ -802,4 +954,121 @@ bool ui_gimbal_cal_is_active(void) {
 
 uint8_t ui_gimbal_cal_get_axis(void) {
     return gimbal_cal_axis;
+}
+
+//=============================================================================
+// Pot Calibration
+//=============================================================================
+
+void ui_pot_cal_start(void) {
+    pot_cal_active = true;
+    pot_cal_index = 0;
+    pot_cal_step = 0;
+    memset(pot_cal_recorded, 0, sizeof(pot_cal_recorded));
+    
+    lv_obj_add_flag(pot_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(pot_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(pot_cal_bar, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(pot_cal_value_label, LV_OBJ_FLAG_HIDDEN);
+    
+    pot_cal_update_ui();
+    
+    printf("Pot calibration started\r\n");
+}
+
+void ui_pot_cal_record_step(void) {
+    if (!pot_cal_active) return;
+    
+    // Record current raw value for this step (0=min, 1=max)
+    pot_cal_recorded[pot_cal_index][pot_cal_step] = pot_cal_current_value;
+    
+    printf("Pot cal: %s step %d = %d\r\n",
+           pot_names[pot_cal_index], pot_cal_step, pot_cal_current_value);
+    
+    pot_cal_step++;
+    
+    if (pot_cal_step >= 2) {
+        // Finished this pot - calculate calibration
+        int16_t min_val = pot_cal_recorded[pot_cal_index][0];
+        int16_t max_val = pot_cal_recorded[pot_cal_index][1];
+        
+        // Detect inversion: if min > max, the pot is wired backwards
+        bool inverted = (min_val > max_val);
+        if (inverted) {
+            int16_t temp = min_val;
+            min_val = max_val;
+            max_val = temp;
+        }
+        
+        // Save calibration to Settings (auto-persists to NVS)
+        PotCalibration_t cal;
+        cal.min_raw = min_val;
+        cal.max_raw = max_val;
+        cal.inverted = inverted;
+        cal.calibrated = true;
+        Settings_SetPotCalibration(pot_cal_index, &cal);
+        
+        // Apply calibration to the driver immediately
+        ui_apply_pot_calibration(pot_cal_index, min_val, max_val, inverted);
+        
+        printf("%s calibrated: min=%d, max=%d, inverted=%d\r\n",
+               pot_names[pot_cal_index], min_val, max_val, inverted);
+        
+        // Update status label for this pot
+        lv_label_set_text(pot_labels[pot_cal_index], inverted ? "INV" : "OK");
+        lv_obj_set_style_text_color(pot_labels[pot_cal_index],
+            lv_color_hex(UI_COLOR_ACCENT_GREEN), 0);
+        
+        // Move to next pot
+        pot_cal_index++;
+        pot_cal_step = 0;
+        
+        if (pot_cal_index >= 2) {
+            // Both pots calibrated!
+            pot_cal_active = false;
+            lv_label_set_text(pot_cal_instruction, "Calibration complete!\nBoth pots calibrated.");
+            lv_obj_add_flag(pot_cal_continue_btn, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(pot_cal_bar, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(pot_cal_value_label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(pot_cal_start_btn, LV_OBJ_FLAG_HIDDEN);
+            
+            // Change start button to "Restart"
+            lv_obj_t *lbl = lv_obj_get_child(pot_cal_start_btn, 0);
+            if (lbl) lv_label_set_text(lbl, LV_SYMBOL_REFRESH " Restart");
+            
+            printf("Pot calibration complete!\r\n");
+            return;
+        }
+    }
+    
+    pot_cal_update_ui();
+}
+
+void ui_pot_cal_update(int16_t values[2]) {
+    char buf[16];
+    
+    // Live raw values in the status row (skip slots showing OK/INV results)
+    for (int i = 0; i < 2; i++) {
+        if (pot_labels[i] && (pot_cal_active ? i >= pot_cal_index : true)) {
+            snprintf(buf, sizeof(buf), "%d", values[i]);
+            lv_label_set_text(pot_labels[i], buf);
+        }
+    }
+    
+    // If calibration is active, update the main display for the current pot
+    if (pot_cal_active && pot_cal_index < 2) {
+        pot_cal_current_value = values[pot_cal_index];
+        
+        if (pot_cal_bar) {
+            lv_bar_set_value(pot_cal_bar, pot_cal_current_value, LV_ANIM_OFF);
+        }
+        if (pot_cal_value_label) {
+            snprintf(buf, sizeof(buf), "%d", pot_cal_current_value);
+            lv_label_set_text(pot_cal_value_label, buf);
+        }
+    }
+}
+
+bool ui_pot_cal_is_active(void) {
+    return pot_cal_active;
 }

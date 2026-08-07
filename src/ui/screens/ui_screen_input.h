@@ -31,6 +31,7 @@ extern lv_obj_t *ui_EncLabels[2];
 extern lv_obj_t *ui_EncValues[2];
 
 void ui_create_input_screen(lv_obj_t *parent);
+void ui_enable_input_simulation(void);
 
 // Configures the input screen elements
 void ui_set_gimbal_left(int16_t x, int16_t y);

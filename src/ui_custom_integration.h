@@ -52,6 +52,21 @@ void ui_apply_gimbal_calibration(uint8_t axis, int16_t min_val, int16_t center_v
 void ui_load_gimbal_calibrations(void);
 
 /**
+ * @brief Apply pot calibration to the input driver
+ * 
+ * Called from UI when calibration is recorded.
+ */
+void ui_apply_pot_calibration(uint8_t pot, int16_t min_val, int16_t max_val, bool inverted);
+
+/**
+ * @brief Load pot calibrations from Settings
+ * 
+ * Call this after InputManager is initialized to load any
+ * previously saved calibration data.
+ */
+void ui_load_pot_calibrations(void);
+
+/**
  * @brief Initialize custom UI and switch to it
  * 
  * Call this instead of ui_init() in setup() to use the custom UI.
