@@ -43,7 +43,7 @@ robot buttons.
 | `SW_D` | 2-position, ON | Request terrain leveling |
 | `SW_E` | 3-position UP/CENTER/DOWN | **Left gimbal walk pattern**: wave / ripple / tripod |
 | `SW_F` | 3-position UP/CENTER/DOWN | **Right gimbal job**: turn robot / translate body / rotate body |
-| `SW_G` | 2-position, ON | Request torque-off passive-pose streaming |
+| `SW_G` | 2-position | ON: enter gait-tune editor; OFF: return NAV1 to pose trim |
 | `SW_H` | 2-position, ON | Hand motion authority to USB host or Jetson |
 
 `SW_A`, `SW_B`, and the feature switches are levels, not one-shot buttons.
@@ -67,13 +67,19 @@ window. Moving a gait/body stick cancels an active choreography.
 | `NAV1 Center` | Reset roll and pitch trim / save gait settings while tuning |
 | `NAV2 Up` | Twirl in place |
 | `NAV2 Down` | Stretch/push-up sequence |
-| `NAV2 Left` | Hold lean/look pose until cancelled |
-| `NAV2 Right` | Engage / leave the gait-tune editor |
+| `NAV2 Left` | Bounded jump-kick: crouch, fast capped extension, short tripod flick |
+| `NAV2 Right` | Hold spider-attack stance until stick input cancels it |
 | `NAV2 Center` | Loop dance until stick input cancels it |
+
+The jump-kick is a bounded hop attempt for a clear, level surface. It is not a
+ballistic jump: firmware still applies the safety state gate, Cartesian reach
+limits, servo travel clamps, and a 120 mm/s height-rate request below the
+firmware’s 200 mm/s hard ceiling. Validate it with the robot supported before
+ground use.
 
 ## Gait Tune Editor
 
-`NAV2 Right` toggles the editor. While it is engaged NAV1 edits gait shape
+`SW_G` controls the editor directly. While it is ON NAV1 edits gait shape
 instead of pose trim, cycling step height -> stride -> duty and changing the
 selected value by 5% of its safe range per press. `NAV1 Center` persists the
 result to the robot's 24LC32 config; the robot refuses to write EEPROM while it

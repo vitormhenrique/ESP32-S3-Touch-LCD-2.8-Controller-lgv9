@@ -35,6 +35,11 @@ CRSF_Manager::CRSF_Manager()
     , _linkOk(false)
     , _prevLinkUp(false)
     , _prevAttitudeValid(false)
+    , _lastHexapodErrorSequence(0)
+    , _lastHexapodErrorCode(0)
+    , _lastHexapodErrorDetail(0)
+    , _lastHexapodErrorSeverity(0)
+    , _lastHexapodErrorCount(0)
     , _lastLogMs(0)
     , _lastStatsLogMs(0)
     , _logQueue(nullptr)
@@ -513,7 +518,26 @@ void CRSF_Manager::rawFrameCb(uint8_t type, const uint8_t* payload,
     HexapodTelemetryStatus hexapod;
     if (type == HEXAPOD_CRSF_FRAME_TYPE &&
         hexapod_telemetry_decode(payload, len, &hexapod)) {
+        bool log_error = false;
+        const uint8_t severity = hexapod_error_severity(&hexapod);
         if (xSemaphoreTake(self->_telemetryMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            const bool new_announcement =
+                hexapod.error_sequence != 0 &&
+                hexapod.error_sequence != self->_lastHexapodErrorSequence;
+            if (new_announcement) {
+                // Firmware advances the sequence for both a new incident and
+                // its periodic "still failing" heartbeat. Only log the former;
+                // a lower count marks the same key after its quiet interval.
+                log_error = hexapod.error_code != self->_lastHexapodErrorCode ||
+                            hexapod.error_detail != self->_lastHexapodErrorDetail ||
+                            hexapod.error_count < self->_lastHexapodErrorCount ||
+                            severity > self->_lastHexapodErrorSeverity;
+                self->_lastHexapodErrorSequence = hexapod.error_sequence;
+                self->_lastHexapodErrorCode = hexapod.error_code;
+                self->_lastHexapodErrorDetail = hexapod.error_detail;
+                self->_lastHexapodErrorSeverity = severity;
+                self->_lastHexapodErrorCount = hexapod.error_count;
+            }
             self->_telemetry.hexapod = hexapod;
             self->_telemetry.hexapod_valid = true;
             self->_telemetry.last_hexapod_ms = millis();
@@ -522,6 +546,14 @@ void CRSF_Manager::rawFrameCb(uint8_t type, const uint8_t* payload,
                 (hexapod.flags & HEXAPOD_FLAG_BATTERY_VALID) != 0;
             self->_telemetry.last_battery_ms = self->_telemetry.last_hexapod_ms;
             xSemaphoreGive(self->_telemetryMutex);
+        }
+        if (log_error) {
+            char message[CRSF_LOG_MSG_MAX];
+            snprintf(message, sizeof(message), "Robot %s: %s (%u)",
+                     hexapod_error_severity_name(severity),
+                     hexapod_error_name(hexapod.error_code),
+                     hexapod.error_detail);
+            self->queueLog(message);
         }
         return;
     }

@@ -155,6 +155,11 @@ private:
     // Log state tracking
     bool     _prevLinkUp;
     bool     _prevAttitudeValid;
+    uint8_t  _lastHexapodErrorSequence;
+    uint8_t  _lastHexapodErrorCode;
+    uint8_t  _lastHexapodErrorDetail;
+    uint8_t  _lastHexapodErrorSeverity;
+    uint16_t _lastHexapodErrorCount;
     uint32_t _lastLogMs;
     uint32_t _lastStatsLogMs;
 
