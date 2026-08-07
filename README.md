@@ -110,11 +110,6 @@ radio set switch <exact discovered option>
 Run `radio refresh` before changing a value. The write is reported as verified
 only after the module confirms it.
 
-The bundled [TX16S profile package](TX16S%20MK3/README_IMPORT.txt) is a
-separate EdgeTX reference model for a conventional transmitter. It is useful
-for the HexNav receiver setup, but its mixer layout is not the OpenRC CRSF
-packet format documented below.
-
 ## CRSF Channel Contract
 
 OpenRC sends a standard CRSF `RC_CHANNELS_PACKED` frame with 16 packed 11-bit
@@ -217,7 +212,6 @@ and all simulator commands.
 src/                    ESP32-S3 firmware, UI, input drivers, CRSF, ELRS client
 lib/ChannelPack/        Shared 16-channel CRSF pack/unpack contract
 docs/                   Hexapod controls and ELRS Lua reference scripts
-TX16S MK3/              Optional EdgeTX profile and import instructions
 simulator/              SDL2 desktop build of the production LVGL UI
 img/                    OpenRC-Transmitter assembly photographs
 platformio.ini          ESP32-S3 build, upload, library, and feature settings
